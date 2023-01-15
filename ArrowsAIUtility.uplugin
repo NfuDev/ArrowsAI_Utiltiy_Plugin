@@ -1,0 +1,24 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "ArrowsAIUtility",
+	"Description": "Simple AI Perception Component that has usful logics for stealth mechanics , helps with spot and search logics ",
+	"Category": "Other",
+	"CreatedBy": "Nightfall16",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "ArrowsAIUtility",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
