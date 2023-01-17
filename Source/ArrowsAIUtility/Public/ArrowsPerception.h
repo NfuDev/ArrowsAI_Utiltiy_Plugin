@@ -78,6 +78,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPerceptionDetects, const AActor*,
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FUnCertainedDetection, const FVector&, LocationToCheck);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAgentForget, const TArray<FVector>&, SearchingLocations);
 
+
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class ARROWSAIUTILITY_API UArrowsPerception : public UActorComponent
 {
@@ -179,6 +180,9 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Awareness Settings")
 		float MaxMemory;
 
+	UPROPERTY(EditAnywhere, Category = "Awareness Settings")
+		float ReactionDelay;
+
 	//** ABOVE  WAS ALL USER SETTINGS NOW WE GET UNDER THE HOOD VARIABLES FOR CORE SYSTEMS ** // 
 
 	/*the value of awareness , this indicate the percentage between the time while the agent started to look at the player and the time remaining before the spot , used for cosmatics only , like a small widget to warn the player*/
@@ -228,6 +232,9 @@ public:
 	FTimerHandle RecentForgotHandler;
 
 	UPROPERTY()
+	FTimerHandle DelayedReactionHandler;
+
+	UPROPERTY()
 	ACharacter* DivinePlayerRef;
 
 	UPROPERTY(BlueprintReadWrite)
@@ -263,6 +270,17 @@ public:
 
 	UFUNCTION()
 	void DrawLastSeen();
+
+	/*to draw calculated hiding poinst */
+	UFUNCTION()
+	void DrawGeneratedPoints(FVector Location, FVector Normals, FColor _Color);
+
+	/*called when uncertained detection happens so the agent will react only for it or the forget state, and the certained detection should be handled by the plugin user in his own behaviour tree logic*/
+	UFUNCTION()
+	void ReactToDetection(bool bCalledOnForgot);
+
+	UFUNCTION()
+	void DelayedUncertainedSearch();
 
 	/*Finds if the currenly hit obstacle is already hit before so we check to see if we should add a point behind it or not*/
 	UFUNCTION()
@@ -308,6 +326,6 @@ public:
 
 	
 
- /*   UFUNCTION()
-	void OnAgentMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result);*/
+	/*now i knew it XDD never use a UFUNCTION with a function with struct paramerters that are not decorated with USTRUCT macro or this will make your life so hard*/
+	void OnAgentMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result);
 };

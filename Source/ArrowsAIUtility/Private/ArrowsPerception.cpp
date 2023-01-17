@@ -30,13 +30,12 @@ UArrowsPerception::UArrowsPerception()
 	UncertainedPercent = 0.1f;
 	ForceFullAwarenessDistance = 500.0f;
 	MaxMemory = 5.0f;
+	ReactionDelay = 2.0f;
 
 	LastSeenDebugDrawTime = 10.0f;
 
-	AgentController = UAIBlueprintHelperLibrary::GetAIController(GetOwner());
-	//AgentController->
 	
-	
+
 	// ...
 }
 
@@ -48,6 +47,11 @@ void UArrowsPerception::BeginPlay()
 
 	//this will be used to figure if the player is in range so we dont need to to the trace logics and this is better performance , this refernce is for calculation only and not used for define detection
 	DivinePlayerRef = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
+	AgentController = UAIBlueprintHelperLibrary::GetAIController(GetOwner());// i used the calss constructor last time to get the reference and this is wrong i forgot that possission happens only after begin play
+
+	AgentController->GetPathFollowingComponent()->OnRequestFinished.AddUObject(this, &UArrowsPerception::OnAgentMoveCompleted);
+
+	GuardingLocation = GetOwner()->GetActorTransform();//save the spawn position to return to after doing the search after forget or the check out the uncertained last seen locaion
 	
 	// ...
 	
@@ -140,9 +144,10 @@ void UArrowsPerception::PerceptionUpdate()
 
 					AgentAwareness = 0.0f;
 					FVector LastSeen = EscapeTransform.GetLocation();
-					FVector ArrowsEnd = LastSeen + (EscapeTransform.GetRotation().Vector() * 100.0f);
+					//FVector ArrowsEnd = LastSeen + (EscapeTransform.GetRotation().Vector() * 100.0f);
 					DrawLastSeen();
 					UnCertainedDetection.Broadcast(LastSeen);
+					ReactToDetection(false);
 					AgentPlaySound(UnCertainedSounds);
 
 				}
@@ -150,6 +155,7 @@ void UArrowsPerception::PerceptionUpdate()
 				{
 					ClearAndInvalidateTimer(RecentForgotHandler);
 					AgentPlaySound(RegainSightSounds);
+					ClearAndInvalidateTimer(AwarenessTimeHandler);
 					AwarenessTimer();
 					bRecentlyForgot = false;
 				}
@@ -169,17 +175,9 @@ void UArrowsPerception::PerceptionUpdate()
 				
 				if (!GetWorld()->GetTimerManager().IsTimerActive(AwarenessTimeHandler) && (GetOwner()->GetActorLocation() - DivinePlayerRef->GetActorLocation()).Size() > ForceFullAwarenessDistance)
 				{
-
-					GetWorld()->GetTimerManager().SetTimer(AwarenessTimeHandler, this, &UArrowsPerception::AwarenessTimer, AwarenessDelay, false);
-
-				}
-
-			/*force full detection if we have line of sight , and the player is too close , then awareness will raise so quick (in this case instant awareness)*/
-			else if((GetOwner()->GetActorLocation() - DivinePlayerRef->GetActorLocation()).Size() <= ForceFullAwarenessDistance)
-				{
 					if (!bRecentlyForgot)
 					{
-						AwarenessTimer();
+						GetWorld()->GetTimerManager().SetTimer(AwarenessTimeHandler, this, &UArrowsPerception::AwarenessTimer, AwarenessDelay, false);
 					}
 					else
 					{
@@ -187,9 +185,30 @@ void UArrowsPerception::PerceptionUpdate()
 						AgentPlaySound(RegainSightSounds);
 						AwarenessTimer();
 						bRecentlyForgot = false;
+					}
+
+				}
+
+			/*force full detection if we have line of sight , and the player is too close , then awareness will raise so quick (in this case instant awareness)*/
+			  else if((GetOwner()->GetActorLocation() - DivinePlayerRef->GetActorLocation()).Size() <= ForceFullAwarenessDistance)
+			  {
+					ClearAndInvalidateTimer(AwarenessTimeHandler);
+
+					if (!bRecentlyForgot)
+					{
+						PrintDebugs("Forced Detecion ", 10.0f);
+						AwarenessTimer();
+					}
+					else
+					{
+						PrintDebugs("detected after forgtting and we forced detection ", 10.0f);
+						ClearAndInvalidateTimer(RecentForgotHandler);
+						AgentPlaySound(RegainSightSounds);
+						AwarenessTimer();
+						bRecentlyForgot = false;
 						
 					}
-				}
+			  }
 			}
 			
 			else if (bPlayerWasSpotted && GetWorld()->GetTimerManager().IsTimerActive(ForgetTimeHandler))//if the player was spoted and we lost sight but we regaied it before forgetting him we call this part of the code
@@ -198,6 +217,8 @@ void UArrowsPerception::PerceptionUpdate()
 				{
 
 					AgentPlaySound(RegainSightSounds);
+					ClearAndInvalidateTimer(AwarenessTimeHandler);
+					PrintDebugs("fast sight regain and awareness clearance ", 10.0f);
 				}
 
 				ClearAndInvalidateTimer(ForgetTimeHandler);
@@ -220,9 +241,10 @@ void UArrowsPerception::PerceptionUpdate()
 
 			AgentAwareness = 0.0f;
 			FVector LastSeen = EscapeTransform.GetLocation();
-			FVector ArrowsEnd = LastSeen + (EscapeTransform.GetRotation().Vector() * 100.0f);
+			//FVector ArrowsEnd = LastSeen + (EscapeTransform.GetRotation().Vector() * 100.0f); wasnt needed cuz i deleted the draw arrow from here and implemented the draw last seen which has it's own logics for drawing the arrow
 			DrawLastSeen();
 			UnCertainedDetection.Broadcast(LastSeen);
+			ReactToDetection(false);
 			AgentPlaySound(UnCertainedSounds);
 		}
 		else
@@ -265,12 +287,25 @@ void UArrowsPerception::DrawLastSeen()
 	if (DebugLastSeen)
 	{
 		//selecting the right direction to draw the arrow , if we are moving then we care about the direction of the movement and if not the the rotation of the actor which is registed in the escape transform
-		FVector DrawDirection = DivinePlayerRef->GetVelocity().Size() > 0.1 ? DivinePlayerRef->GetVelocity().Rotation().Vector() : EscapeTransform.GetRotation().Vector();
+		FVector PlayerVelocity = DivinePlayerRef->GetVelocity();
+		PlayerVelocity.Z = 0; // removing the speed of falling so we dont get wrong directin if the last moment before seeing the player the player was falling we will get a downwards arrow and this will give invalid searching locations 
+
+		FVector DrawDirection = PlayerVelocity.Size() > 0.1 ? DivinePlayerRef->GetVelocity().Rotation().Vector() : EscapeTransform.GetRotation().Vector();
 
 		UKismetSystemLibrary::DrawDebugSphere(GetWorld(), EscapeTransform.GetLocation(), 50.0f, 4, FColor::Red, LastSeenDebugDrawTime, 1.0f);
 		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), EscapeTransform.GetLocation(), EscapeTransform.GetLocation()+(DrawDirection*100.0f) , 2.0f, FColor::Red, LastSeenDebugDrawTime, 2.0f);
 	}
 }
+
+void UArrowsPerception::DrawGeneratedPoints(FVector Location, FVector Normals, FColor _Color)
+{
+	if (PointGenerationDebug)
+	{
+		UKismetSystemLibrary::DrawDebugSphere(GetWorld(), Location, 50.0f, 4, _Color, 10.0f, 1.0f);
+		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), Location, Location + (Normals * 100.0f), 2.0f, _Color, 10.0f, 2.0f);
+	}
+}
+
 #pragma endregion
 
 
@@ -461,22 +496,24 @@ void UArrowsPerception::SetMemberInPoints(AActor* Obstacle, FVector Location, FV
 				PrintDebugs("Addeed Cuz Distance Was Bigger Than Accpeted Distance", 5.0f);
 				PointsData[Index].HidingLocations.Add(NewPoint);
 
-				if (PointGenerationDebug)
+				/*if (PointGenerationDebug)
 				{
 					UKismetSystemLibrary::DrawDebugSphere(GetWorld(), Location, 50.0f, 4, FColor::Green, 10.0f, 1.0f);
 					UKismetSystemLibrary::DrawDebugArrow(GetWorld(), Location, Location + (Normals * 100.0f), 2.0f, FColor::Green, 10.0f, 2.0f);
-				}
+				}*/
+				DrawGeneratedPoints(Location, Normals, FColor::Green);
 		    }
 
 			//too close and same wall direction
 			else
 			{
 				PrintDebugs("Filtered cuz faild the distance test", 5.0f);
-				if (PointGenerationDebug) 
+				/*if (PointGenerationDebug) 
 				{
 					UKismetSystemLibrary::DrawDebugSphere(GetWorld(), Location, 50.0f, 4, FColor::Red, 10.0f, 1.0f);
 					UKismetSystemLibrary::DrawDebugArrow(GetWorld(), Location, Location + (Normals * 100.0f), 2.0f, FColor::Red, 10.0f, 2.0f); 
-				}
+				}*/
+				DrawGeneratedPoints(Location, Normals, FColor::Red);
 			}
 		}
 
@@ -486,11 +523,12 @@ void UArrowsPerception::SetMemberInPoints(AActor* Obstacle, FVector Location, FV
 
 			PrintDebugs("Added cuz not same direction", 5.0f);
 			PointsData[Index].HidingLocations.Add(NewPoint);
-			if (PointGenerationDebug)
+			/*if (PointGenerationDebug)
 			{
 				UKismetSystemLibrary::DrawDebugSphere(GetWorld(), Location, 50.0f, 4, FColor::Green, 10.0f, 1.0f);
 				UKismetSystemLibrary::DrawDebugArrow(GetWorld(), Location, Location + (Normals * 100.0f), 2.0f, FColor::Green, 10.0f, 2.0f);
-			}
+			}*/
+			DrawGeneratedPoints(Location, Normals, FColor::Green);
 		}
 		
 	}
@@ -504,11 +542,12 @@ void UArrowsPerception::SetMemberInPoints(AActor* Obstacle, FVector Location, FV
 		NewEntryPoint.ObstacleObject = Obstacle;
 		PointsData.Add(NewEntryPoint);
 
-		if (PointGenerationDebug)
+		/*if (PointGenerationDebug)
 		{
 			UKismetSystemLibrary::DrawDebugSphere(GetWorld(), Location, 50.0f, 4, FColor::Green, 10.0f, 1.0f);
 			UKismetSystemLibrary::DrawDebugArrow(GetWorld(), Location, Location + (Normals * 100.0f), 2.0f, FColor::Green, 10.0f, 2.0f);
-		}
+		}*/
+		DrawGeneratedPoints(Location, Normals, FColor::Green);
 	}
 }
 
@@ -587,15 +626,38 @@ void UArrowsPerception::GaurdingBehaviour()
 void UArrowsPerception::AgentMoveTo(FVector Location)
 {
 
-//	TSubclassOf<UNavigationQueryFilter> NavigationFilter;
-  //  AgentController->MoveToLocation(Location, 5.0f, true, true, true, true, NavigationFilter, true);
-	
+	TSubclassOf<UNavigationQueryFilter> NavigationFilter;
+	if (AgentController)
+	{
+		AgentController->MoveToLocation(Location, 5.0f, true, true, true, true, NavigationFilter, true);
+	}
+	else
+	{
+		PrintDebugs("AI controller is not valid", 5.0f);
+	}
 	
 }
 
-//void UArrowsPerception::OnAgentMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result)
-//{
-//	// seek nex point 
-//}
+void UArrowsPerception::OnAgentMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result)
+{
+	// seek nex point 
+}
 
+void UArrowsPerception::ReactToDetection(bool bCalledOnForgot)
+{
+	if (bCalledOnForgot)
+	{
+
+	}
+	else
+	{
+		GetWorld()->GetTimerManager().SetTimer(DelayedReactionHandler, this, &UArrowsPerception::DelayedUncertainedSearch, ReactionDelay, false);
+	}
+		
+}
+
+void UArrowsPerception::DelayedUncertainedSearch()
+{
+	AgentMoveTo(EscapeTransform.GetLocation());
+}
 #pragma endregion
