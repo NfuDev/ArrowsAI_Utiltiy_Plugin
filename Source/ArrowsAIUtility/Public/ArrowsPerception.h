@@ -1,4 +1,4 @@
-// Still In Early Development Stage , Developed By NightFall16 @ArrowsInteractive
+// Still In Early Development Stage , Developed By NightFall16 @ArrowsInteractive - Unreal Engine 4.26.2
 
 #pragma once
 
@@ -6,7 +6,10 @@
 #include "Components/ActorComponent.h"
 #include "Engine/EngineTypes.h"
 #include "Delegates/Delegate.h"
+#include "Runtime/AIModule/Classes/AIController.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "ArrowsPerception.generated.h"
+
 
 UENUM(BlueprintType)
 enum class  EPerceptionState : uint8
@@ -210,6 +213,9 @@ public:
 	bool bInVisionCone;
 
 	UPROPERTY()
+	bool bRecentlyForgot;
+
+	UPROPERTY()
 	FTransform EscapeTransform;
 
 	UPROPERTY()
@@ -217,6 +223,9 @@ public:
 
 	UPROPERTY()
 	FTimerHandle ForgetTimeHandler;
+
+	UPROPERTY()
+	FTimerHandle RecentForgotHandler;
 
 	UPROPERTY()
 	ACharacter* DivinePlayerRef;
@@ -236,6 +245,9 @@ public:
 
 	UFUNCTION()
 	void ForgettingTimer();
+
+	UFUNCTION()
+	void ResetRecentlyForgot();
 
 	UFUNCTION()
 	void PrintDebugs(FString DebugMes, float duration = 0.0f);
@@ -280,9 +292,22 @@ public:
 	UPROPERTY()
 	FTransform GuardingLocation;
 
+	/*points figured out by the radial check and tested to be vaild hiding points so now we make the ai move to each one of them and invistgate , these poinst are send with the [Forget Delegate] so the user 
+	can do other stuff with them*/
+	UPROPERTY()
+	TArray<FVector> InvestigationPoints;
+
+	UPROPERTY(BlueprintReadOnly)
+	AAIController* AgentController;
+
 	UFUNCTION()
 	void GaurdingBehaviour();
 
-	UFUNCTION()
-	void AgentMoveTo();
+	UFUNCTION(BlueprintCallable)
+	void AgentMoveTo(FVector MoveToLocation);
+
+	
+
+ /*   UFUNCTION()
+	void OnAgentMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result);*/
 };

@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+// Still In Early Development Stage , Developed By NightFall16 @ArrowsInteractive - Unreal Engine 4.26.2
 
 
 #include "ArrowsPerception.h"
@@ -7,6 +7,10 @@
 #include "Kismet/KismetMathLibrary.h"
 #include <Engine/Classes/GameFramework/Character.h>
 #include "Kismet/GameplayStatics.h"
+
+
+#include "Blueprint/AIBlueprintHelperLibrary.h"
+
 
 // Sets default values for this component's properties
 UArrowsPerception::UArrowsPerception()
@@ -24,10 +28,14 @@ UArrowsPerception::UArrowsPerception()
 
 	AwarenessDelay = 2.0f;
 	UncertainedPercent = 0.1f;
-	ForceFullAwarenessDistance = 100.0f;
+	ForceFullAwarenessDistance = 500.0f;
 	MaxMemory = 5.0f;
 
 	LastSeenDebugDrawTime = 10.0f;
+
+	AgentController = UAIBlueprintHelperLibrary::GetAIController(GetOwner());
+	//AgentController->
+	
 	
 	// ...
 }
@@ -40,7 +48,7 @@ void UArrowsPerception::BeginPlay()
 
 	//this will be used to figure if the player is in range so we dont need to to the trace logics and this is better performance , this refernce is for calculation only and not used for define detection
 	DivinePlayerRef = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
-
+	
 	// ...
 	
 }
@@ -127,13 +135,24 @@ void UArrowsPerception::PerceptionUpdate()
 			//but the player was spotted and that was causing a bug and this is the fix
 			else if ((AgentAwareness/ AwarenessDelay >= UncertainedPercent) && !bPlayerWasSpotted && !GetWorld()->GetTimerManager().IsTimerActive(ForgetTimeHandler))
 			{
+				if (!bRecentlyForgot)
+				{
 
-				AgentAwareness = 0.0f;
-				FVector LastSeen = EscapeTransform.GetLocation();
-				FVector ArrowsEnd = LastSeen + (EscapeTransform.GetRotation().Vector() * 100.0f);
-				DrawLastSeen();
-				UnCertainedDetection.Broadcast(LastSeen);
-				AgentPlaySound(UnCertainedSounds);
+					AgentAwareness = 0.0f;
+					FVector LastSeen = EscapeTransform.GetLocation();
+					FVector ArrowsEnd = LastSeen + (EscapeTransform.GetRotation().Vector() * 100.0f);
+					DrawLastSeen();
+					UnCertainedDetection.Broadcast(LastSeen);
+					AgentPlaySound(UnCertainedSounds);
+
+				}
+				else
+				{
+					ClearAndInvalidateTimer(RecentForgotHandler);
+					AgentPlaySound(RegainSightSounds);
+					AwarenessTimer();
+					bRecentlyForgot = false;
+				}
 			}
 
 			ClearAndInvalidateTimer(AwarenessTimeHandler);
@@ -155,9 +174,21 @@ void UArrowsPerception::PerceptionUpdate()
 
 				}
 
-				else
+			/*force full detection if we have line of sight , and the player is too close , then awareness will raise so quick (in this case instant awareness)*/
+			else if((GetOwner()->GetActorLocation() - DivinePlayerRef->GetActorLocation()).Size() <= ForceFullAwarenessDistance)
 				{
-					AwarenessTimer();// if the player was too close then force detection and dont use timer for awareness
+					if (!bRecentlyForgot)
+					{
+						AwarenessTimer();
+					}
+					else
+					{
+						ClearAndInvalidateTimer(RecentForgotHandler);
+						AgentPlaySound(RegainSightSounds);
+						AwarenessTimer();
+						bRecentlyForgot = false;
+						
+					}
 				}
 			}
 			
@@ -165,6 +196,7 @@ void UArrowsPerception::PerceptionUpdate()
 			{
 				if (GetWorld()->GetTimerManager().GetTimerElapsed(ForgetTimeHandler) / MaxMemory > 0.7f)
 				{
+
 					AgentPlaySound(RegainSightSounds);
 				}
 
@@ -178,6 +210,30 @@ void UArrowsPerception::PerceptionUpdate()
 	else if (!bInVisionCone)
 	{
 		bHasLineOfSight = false;
+
+    if ((AgentAwareness / AwarenessDelay >= UncertainedPercent) && !bPlayerWasSpotted && !GetWorld()->GetTimerManager().IsTimerActive(ForgetTimeHandler))
+	{
+
+		if (!bRecentlyForgot)
+		{
+
+
+			AgentAwareness = 0.0f;
+			FVector LastSeen = EscapeTransform.GetLocation();
+			FVector ArrowsEnd = LastSeen + (EscapeTransform.GetRotation().Vector() * 100.0f);
+			DrawLastSeen();
+			UnCertainedDetection.Broadcast(LastSeen);
+			AgentPlaySound(UnCertainedSounds);
+		}
+		else
+		{
+			ClearAndInvalidateTimer(RecentForgotHandler);
+			AgentPlaySound(RegainSightSounds);
+			AwarenessTimer();
+			bRecentlyForgot = false;
+		}
+	}
+
 		ClearAndInvalidateTimer(AwarenessTimeHandler);
 
 		//start forgetting timer
@@ -254,19 +310,35 @@ void UArrowsPerception::AwarenessTimer()
 	PrintDebugs("the awareness funciuon is being called", 3.0f);
 	bPlayerWasSpotted = true;
 	OnPerceptionDetects.Broadcast(DivinePlayerRef);
-	AgentPlaySound(SpottedSound);
+	if (!bRecentlyForgot)
+	{
+		AgentPlaySound(SpottedSound);
+	}
+	
 }
 
 void UArrowsPerception::ForgettingTimer()
 {
-	TArray<FVector> CombinedLocations;// i should add the function for generating logical hiding point for the agent to search and to send via the delegate to the end user
+	InvestigationPoints.Empty();
+
 	AgentAwareness = 0.0f;
 	bPlayerWasSpotted = false;
+	bRecentlyForgot = true;
+	// so if we forgot the player reference and directly after that we had and uncertained detection, we want to say that we actually saw the player again since we recently forgot him and we were in a chase so any doubt is certained
+	GetWorld()->GetTimerManager().SetTimer(RecentForgotHandler, this, &UArrowsPerception::ResetRecentlyForgot, 3.0f, false);
+
 	DrawLastSeen();
 	RadialCheck();
-	CombinedLocations = CombineHidingPoints();
-	OnAgentForget.Broadcast(CombinedLocations);
+
+	InvestigationPoints = CombineHidingPoints();
+	OnAgentForget.Broadcast(InvestigationPoints);
+
 	AgentPlaySound(ForgotSounds);
+}
+
+void UArrowsPerception::ResetRecentlyForgot()
+{
+	bRecentlyForgot = false;
 }
 #pragma endregion 
 
@@ -338,7 +410,6 @@ bool UArrowsPerception::FindStructArrayElementByMember(AActor* StructMemeber, TA
 //loop through the hit results for each ray and check the points 
 void UArrowsPerception::LoopThroughRayHitResults(TArray<FHitResult> RayHitResults)
 {
-	PrintDebugs("Points in this ray : " + FString::FromInt(RayHitResults.Num()), 2.0f);
 	bool bPointsHasInitOverlap;
 	int32 Index;
 	bool found;
@@ -351,16 +422,21 @@ void UArrowsPerception::LoopThroughRayHitResults(TArray<FHitResult> RayHitResult
 			//add new memeber if the point is behind new obstacle cuz we did the check using the [find struct array element by member]
 			if (!found)
 			{
-				PrintDebugs("Adding New Memeber", 5.0f);
+				//PrintDebugs("Adding New Memeber", 5.0f);
 				SetMemberInPoints(Hit.GetActor(), Hit.Location, Hit.Normal, 300.0f);
 			}
 
 			else
 			{
-				PrintDebugs("Setting At Index : " + FString::FromInt(Index), 5.0f);
+				//PrintDebugs("Setting At Index : " + FString::FromInt(Index), 5.0f);
 				SetMemberInPoints(Hit.GetActor(), Hit.Location, Hit.Normal, 300.0f);
 				//PrintDebugs("Found Similar Entry, Edited The Found Element AT Index : " + FString::FromInt(Index) + " Number of previous points : " + FString::FromInt(PointsData[Index].HidingLocations.Num()), 10.0f);
 			}
+		}
+
+		else
+		{
+			PrintDebugs("should ignore cuz there was initial overlap ", 5.0f);
 		}
 	}
 	
@@ -379,8 +455,10 @@ void UArrowsPerception::SetMemberInPoints(AActor* Obstacle, FVector Location, FV
 	{
 		if (PointNormalsCheck(PointsData[Index].HidingLocations, Normals.Rotation(), Location, SharedNormalsPointDistance))
 		{
+			PrintDebugs("Found Same Obstacle with same normals and distance is : " + FString::FromInt(SharedNormalsPointDistance), 5.0f);
 			if (SharedNormalsPointDistance >= AcceptedDistance)
 			{
+				PrintDebugs("Addeed Cuz Distance Was Bigger Than Accpeted Distance", 5.0f);
 				PointsData[Index].HidingLocations.Add(NewPoint);
 
 				if (PointGenerationDebug)
@@ -393,6 +471,7 @@ void UArrowsPerception::SetMemberInPoints(AActor* Obstacle, FVector Location, FV
 			//too close and same wall direction
 			else
 			{
+				PrintDebugs("Filtered cuz faild the distance test", 5.0f);
 				if (PointGenerationDebug) 
 				{
 					UKismetSystemLibrary::DrawDebugSphere(GetWorld(), Location, 50.0f, 4, FColor::Red, 10.0f, 1.0f);
@@ -404,6 +483,8 @@ void UArrowsPerception::SetMemberInPoints(AActor* Obstacle, FVector Location, FV
 		//not same wall direction
 		else
 		{
+
+			PrintDebugs("Added cuz not same direction", 5.0f);
 			PointsData[Index].HidingLocations.Add(NewPoint);
 			if (PointGenerationDebug)
 			{
@@ -417,6 +498,7 @@ void UArrowsPerception::SetMemberInPoints(AActor* Obstacle, FVector Location, FV
 	// not found se we make new entry
 	else
 	{
+		PrintDebugs("Added cuz new obstacle", 5.0f);
 		FDetectedObstacles NewEntryPoint;
 		NewEntryPoint.HidingLocations.Add(NewPoint);
 		NewEntryPoint.ObstacleObject = Obstacle;
@@ -436,13 +518,16 @@ bool UArrowsPerception::PointNormalsCheck(TArray<FPoint> _Points, FRotator Rotat
 	for (int32 i = _Points.Num() - 1; i >= 0; i--)
 	{
 		//PrintDebugs("Angle : " +FString::FromInt(UKismetMathLibrary::NormalizedDeltaRotator(_Points[i].Rotation, RotationToCheck).Yaw), 10.0f);
+		/*PrintDebugs("Angle : " + FString::FromInt((_Points[i].Rotation.Vector() - RotationToCheck.Vector()).Size()), 10.0f);
+		UKismetSystemLibrary::DrawDebugSphere(GetWorld(), PointLocation, 50.0f, 4, FColor::Yellow, 10.0f, 1.0f);
+		UKismetSystemLibrary::DrawDebugSphere(GetWorld(), _Points[i].Location, 50.0f, 4, FColor::Red, 10.0f, 1.0f);
+		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), _Points[i].Location, _Points[i].Location + (_Points[i].Rotation.Vector() * 100.0f), 2.0f, FColor::Green, 10.0f, 2.0f);
+		UKismetSystemLibrary::DrawDebugArrow(GetWorld(), PointLocation, PointLocation + (RotationToCheck.Vector() * 100.0f), 2.0f, FColor::Green, 10.0f, 2.0f);*/
 
-		if (UKismetMathLibrary::NormalizedDeltaRotator(_Points[i].Rotation, RotationToCheck).Yaw == 0.0f)
+		if (_Points[i].Rotation.Vector() == RotationToCheck.Vector())//(UKismetMathLibrary::NormalizedDeltaRotator(_Points[i].Rotation, RotationToCheck).Yaw == 0.0f)
 		{
 			Distance = (_Points[i].Location - PointLocation).Size();
-			//UKismetSystemLibrary::DrawDebugSphere(GetWorld(), PointLocation, 10.0f, 4, FColor::Yellow, 1.0f, 1.0f);
-			//UKismetSystemLibrary::DrawDebugSphere(GetWorld(), _Points[i].Location, 10.0f, 4, FColor::Red, 1.0f, 1.0f);
-
+			
 			return true;
 		}
 	}
@@ -499,9 +584,18 @@ void UArrowsPerception::GaurdingBehaviour()
 	
 }
 
-void UArrowsPerception::AgentMoveTo()
+void UArrowsPerception::AgentMoveTo(FVector Location)
 {
+
+//	TSubclassOf<UNavigationQueryFilter> NavigationFilter;
+  //  AgentController->MoveToLocation(Location, 5.0f, true, true, true, true, NavigationFilter, true);
+	
 	
 }
+
+//void UArrowsPerception::OnAgentMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result)
+//{
+//	// seek nex point 
+//}
 
 #pragma endregion
