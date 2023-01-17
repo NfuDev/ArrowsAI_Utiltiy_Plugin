@@ -495,12 +495,6 @@ void UArrowsPerception::SetMemberInPoints(AActor* Obstacle, FVector Location, FV
 			{
 				PrintDebugs("Addeed Cuz Distance Was Bigger Than Accpeted Distance", 5.0f);
 				PointsData[Index].HidingLocations.Add(NewPoint);
-
-				/*if (PointGenerationDebug)
-				{
-					UKismetSystemLibrary::DrawDebugSphere(GetWorld(), Location, 50.0f, 4, FColor::Green, 10.0f, 1.0f);
-					UKismetSystemLibrary::DrawDebugArrow(GetWorld(), Location, Location + (Normals * 100.0f), 2.0f, FColor::Green, 10.0f, 2.0f);
-				}*/
 				DrawGeneratedPoints(Location, Normals, FColor::Green);
 		    }
 
@@ -508,11 +502,6 @@ void UArrowsPerception::SetMemberInPoints(AActor* Obstacle, FVector Location, FV
 			else
 			{
 				PrintDebugs("Filtered cuz faild the distance test", 5.0f);
-				/*if (PointGenerationDebug) 
-				{
-					UKismetSystemLibrary::DrawDebugSphere(GetWorld(), Location, 50.0f, 4, FColor::Red, 10.0f, 1.0f);
-					UKismetSystemLibrary::DrawDebugArrow(GetWorld(), Location, Location + (Normals * 100.0f), 2.0f, FColor::Red, 10.0f, 2.0f); 
-				}*/
 				DrawGeneratedPoints(Location, Normals, FColor::Red);
 			}
 		}
@@ -523,11 +512,6 @@ void UArrowsPerception::SetMemberInPoints(AActor* Obstacle, FVector Location, FV
 
 			PrintDebugs("Added cuz not same direction", 5.0f);
 			PointsData[Index].HidingLocations.Add(NewPoint);
-			/*if (PointGenerationDebug)
-			{
-				UKismetSystemLibrary::DrawDebugSphere(GetWorld(), Location, 50.0f, 4, FColor::Green, 10.0f, 1.0f);
-				UKismetSystemLibrary::DrawDebugArrow(GetWorld(), Location, Location + (Normals * 100.0f), 2.0f, FColor::Green, 10.0f, 2.0f);
-			}*/
 			DrawGeneratedPoints(Location, Normals, FColor::Green);
 		}
 		
@@ -541,12 +525,6 @@ void UArrowsPerception::SetMemberInPoints(AActor* Obstacle, FVector Location, FV
 		NewEntryPoint.HidingLocations.Add(NewPoint);
 		NewEntryPoint.ObstacleObject = Obstacle;
 		PointsData.Add(NewEntryPoint);
-
-		/*if (PointGenerationDebug)
-		{
-			UKismetSystemLibrary::DrawDebugSphere(GetWorld(), Location, 50.0f, 4, FColor::Green, 10.0f, 1.0f);
-			UKismetSystemLibrary::DrawDebugArrow(GetWorld(), Location, Location + (Normals * 100.0f), 2.0f, FColor::Green, 10.0f, 2.0f);
-		}*/
 		DrawGeneratedPoints(Location, Normals, FColor::Green);
 	}
 }
@@ -641,6 +619,11 @@ void UArrowsPerception::AgentMoveTo(FVector Location)
 void UArrowsPerception::OnAgentMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result)
 {
 	// seek nex point 
+	if (!ReactIsSearch && MovementRequest)
+	{
+		MovementRequest = false;
+		AgentMoveTo(GuardingLocation.GetLocation());
+	}
 }
 
 void UArrowsPerception::ReactToDetection(bool bCalledOnForgot)
@@ -658,6 +641,8 @@ void UArrowsPerception::ReactToDetection(bool bCalledOnForgot)
 
 void UArrowsPerception::DelayedUncertainedSearch()
 {
+	ReactIsSearch = false;
+	MovementRequest = true;
 	AgentMoveTo(EscapeTransform.GetLocation());
 }
 #pragma endregion

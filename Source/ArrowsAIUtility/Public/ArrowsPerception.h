@@ -310,6 +310,14 @@ public:
 	UPROPERTY()
 	FTransform GuardingLocation;
 
+	/*used to test after movement completed to the last seen location if we are searching meaning we are testing the on movement compeleted after uncertained detection reaction or after forgetting and should start searching after reaching the last seen location*/
+	UPROPERTY()
+	bool ReactIsSearch;
+
+	/*to prevent recursive calls for move to when we reach the guarding location cus the [on move to compelete] calls the [Agent move to ] to the guarding location and this crashes the engine due to infinite loop*/
+	UPROPERTY()
+	bool MovementRequest;
+
 	/*points figured out by the radial check and tested to be vaild hiding points so now we make the ai move to each one of them and invistgate , these poinst are send with the [Forget Delegate] so the user 
 	can do other stuff with them*/
 	UPROPERTY()
