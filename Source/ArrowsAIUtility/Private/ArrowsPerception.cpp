@@ -22,6 +22,7 @@ UArrowsPerception::UArrowsPerception()
 	//setting defaults 
 	SensingRadius = 1500.0f;
 	SensingTag = FName("Player");
+	AcceptedReportDistance = 2000.0f;
 
 	VisionConeAngle = 45.0f;
 	VisionConeLength = 900.0f;
@@ -63,7 +64,7 @@ void UArrowsPerception::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	DebugPerception();
-	PerceptionUpdate();
+	PerceptionUpdate();//refactor this function later use the new idea of recenlt gained sight , recently lost sight , is currently having sight , is currently not having sight , the currently have and currently not have for tick update since they are called all the time as long as their condition is  correct
 	// ...
 }
 
@@ -270,6 +271,48 @@ void UArrowsPerception::PerceptionUpdate()
 	
 }
 
+void UArrowsPerception::ReportNearAgentsWithDetection(bool bIsLost)
+{
+	TArray<FHitResult> TraceResults;
+	TArray<AActor*> ActorsToIgnore;
+	FVector Start = GetOwner()->GetActorLocation();
+	FVector End = Start + FVector(0.01f, 0.0f, 0.0f);
+	TEnumAsByte<ETraceTypeQuery> TraceChannel;
+
+
+	bool hit = UKismetSystemLibrary::SphereTraceMulti(GetWorld(), Start, End, AcceptedReportDistance, TraceChannel, false, ActorsToIgnore, EDrawDebugTrace::ForDuration, TraceResults, true, FColor::Red, FColor::Green, 10.0f);
+
+	for (auto& SingleHit : TraceResults)
+	{
+		UArrowsPerception* OtherPerceptionComponenet = Cast< UArrowsPerception>(SingleHit.GetActor()->GetComponentByClass(UArrowsPerception::StaticClass()));
+
+		if (OtherPerceptionComponenet)
+		{
+			OtherPerceptionComponenet->RespondToNearAgentReport(this, bIsLost);
+		}
+	}
+
+}
+
+
+void UArrowsPerception::RespondToNearAgentReport(UArrowsPerception* Instegator, bool bIsLost)
+{
+
+	if (bIsLost)//if the agent sent the report and he was detecting the player then we know that the near agent was deteting so we force detection
+	{
+		bNearAgentDetects = true;
+		AwarenessTimer();//forcing awareness here too when we hear about the player being spotted by another near by agent
+	}
+	else
+	{
+		if (bPlayerWasSpotted)// if the agent reported the loss of the player we send a report about we know where he is and force awareness
+		{
+			Instegator->bNearAgentDetects = true;
+			Instegator->AwarenessTimer();//telling the other agent if he reported that he lost the player , and we have spotted him so we tell him the location of the player by forcing the detection on him
+		}
+	}
+}
+
 #pragma endregion Perception Update
 
 #pragma region Debugging
@@ -345,7 +388,7 @@ void UArrowsPerception::AwarenessTimer()
 	PrintDebugs("the awareness funciuon is being called", 3.0f);
 	bPlayerWasSpotted = true;
 	OnPerceptionDetects.Broadcast(DivinePlayerRef);
-	if (!bRecentlyForgot)
+	if (!bRecentlyForgot || !bNearAgentDetects)// bNear Agent Detects , making sure that if there are two agents one of them have to scream the lines but the other one do not need to just fire the delegate
 	{
 		AgentPlaySound(SpottedSound);
 	}
@@ -622,7 +665,7 @@ void UArrowsPerception::OnAgentMoveCompleted(FAIRequestID RequestID, const FPath
 	if (!ReactIsSearch && MovementRequest)
 	{
 		MovementRequest = false;
-		AgentMoveTo(GuardingLocation.GetLocation());
+		AgentMoveTo(GuardingLocation.GetLocation());// returning to guarding location just for testing
 	}
 }
 

@@ -100,6 +100,14 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Perception Settings")
 		float SensingRadius;
 
+	/*if the agent should report his perception detection to near by enemies*/
+	UPROPERTY(EditAnywhere, Category = "Perception Settings")
+	    bool ReportDetection;
+
+	/*max distance the report can reach , only agents in this distance range can hear the report and act upon it's information*/
+	UPROPERTY(EditAnywhere, Category = "Perception Settings")
+		float AcceptedReportDistance;
+
 	/*the trace channel used for registering targets*/
 	UPROPERTY(EditAnywhere, Category = "Perception Settings")
 	    TEnumAsByte<ETraceTypeQuery> SensingChannel;
@@ -119,6 +127,15 @@ public:
 	/*Array Of sounds to say when the agent is not ceratin about seeing the player , it will play when the agent nearly spotted the player*/
 	UPROPERTY(EditAnywhere, Category = "Perception Settings")
 		TArray<USoundWave*> UnCertainedSounds;
+
+	/*Array of sounds to say when we try to tell other near by agents about detection if they reported lost , made for the case like some agent lost the player and played the forgot sounds then this agent hear that the other has lost 
+	the player and this agent at the same time knows about the player then he will say "he still here" so that the agent who lost the player will know about it again*/
+	UPROPERTY(EditAnywhere, Category = "Perception Settings")
+		TArray<USoundWave*> ReportingDetection;
+
+	/*Array of sounds to replay to the report, like when the other agent tell us where the player is after we lose him , we say like "thanks i got it" or like "yeah i see him now" */
+	UPROPERTY(EditAnywhere, Category = "Perception Settings")
+		TArray<USoundWave*> ReplyingToDetectionReport;
 
 	/*Called When the perception detects the player and returns the player referece as [Actor] so you can cast to your custom class and do your own custom logics*/
 	 UPROPERTY(BlueprintAssignable, Category = "Perception Settings")
@@ -220,6 +237,9 @@ public:
 	bool bRecentlyForgot;
 
 	UPROPERTY()
+	bool bNearAgentDetects;
+
+	UPROPERTY()
 	FTransform EscapeTransform;
 
 	UPROPERTY()
@@ -300,6 +320,18 @@ public:
 
 	UFUNCTION()
 	TArray<FVector> CombineHidingPoints();
+
+	/*this is called when we lose the player or when we detect the player , we tell the near by enemies about this information so they dont have to follow the preception logics for detection they get the info directly from the agent
+	that managed to detect the player*/
+	UFUNCTION()
+	void ReportNearAgentsWithDetection(bool bIsLost);
+
+	/*if the agent was near by and got the report from the other agent, then this agent will reply to him as if he knows where the player is and the report was about losing the player then we force detection on the 
+	agent that send the report and also play sounds like "he is here" and if the agent report was about finding the palyer then we force detectino in the agent that got the report and dont say the spot sound since the first agent 
+	did it*/
+	UFUNCTION()
+	void RespondToNearAgentReport(UArrowsPerception* Instegator, bool bIsLost);
+
 
 	//AI Nutural Behaviours , these are going to be used if the user checked the "Use Arrows Patrol"
 
