@@ -240,6 +240,12 @@ public:
 	bool bNearAgentDetects;
 
 	UPROPERTY()
+	bool bCalledByReport;//now it is just used to define where the function is being called , if it was the calculation or forced results from reports near by
+
+	UPROPERTY()
+	bool bBusyWithLines;
+
+	UPROPERTY()
 	FTransform EscapeTransform;
 
 	UPROPERTY()
@@ -302,6 +308,9 @@ public:
 	UFUNCTION()
 	void DelayedUncertainedSearch();
 
+	UFUNCTION()
+	void DelayedReport();
+
 	/*Finds if the currenly hit obstacle is already hit before so we check to see if we should add a point behind it or not*/
 	UFUNCTION()
 	bool FindStructArrayElementByMember(AActor* StructMemeber, TArray<FDetectedObstacles> _PointsData, int32& FoundIndex);
@@ -322,7 +331,7 @@ public:
 	TArray<FVector> CombineHidingPoints();
 
 	/*this is called when we lose the player or when we detect the player , we tell the near by enemies about this information so they dont have to follow the preception logics for detection they get the info directly from the agent
-	that managed to detect the player*/
+	that managed to detect the player - change the call form the play sound delegate so that it wait for the previous sentance before saying the report so that we dont get overlapped voices*/
 	UFUNCTION()
 	void ReportNearAgentsWithDetection(bool bIsLost);
 
