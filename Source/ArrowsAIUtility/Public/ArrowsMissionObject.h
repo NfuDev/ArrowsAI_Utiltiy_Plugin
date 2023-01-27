@@ -12,7 +12,8 @@
  * 
  */
 
-/*Structure To Hold Each Action And It's State, Done Or Not Done , For UI Porposes, Call [Get UI Text()] To Read This Struct Member*/
+/*Structure To Hold Each Action And It's State, Done Or Not Done , For UI Porposes, Call [Get UI Text()] To Read This Struct Member , the structure was not okay to expose functions so the functions is moved 
+to the class with the name get action info*/
  USTRUCT(BlueprintType)
  struct FMissionActionStates
  {
@@ -27,7 +28,24 @@
  	UPROPERTY(BlueprintReadWrite, EditAnywhere)
  	bool Done;
 
+    UMissionAction* GetMissionDefaults()
+    { 
+        if (MissionAction)
+        {
+            UMissionAction* Value = MissionAction.GetDefaultObject();
+            return Value;
+        }
+
+        return nullptr;
+    }
  };
+
+UENUM(BlueprintType)
+enum class EMissionType : uint8
+{
+    Regulared UMETA(DisplayName = "Regular Mission"),
+    Timed UMETA(DisplayName = "Mission With Timer")
+};
 
 UCLASS(Blueprintable, BlueprintType , meta = (ToolTip= "Simple UObject Handles Missions Basic Functionalities For You"))
 class ARROWSAIUTILITY_API UArrowsMissionObject :  public UObject , public FTickableGameObject
@@ -83,7 +101,13 @@ public:
     UWorld* GetWorld() const;
    
    
- 
+    /*Define The Mission Behaviour, regular mission with fail when black listed actions happens, timed missions fails when timer is out or black listed actions are done*/
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mission Settings")
+    EMissionType MissionType;
+
+    /*Mission Timer In Seconds, in which the mission will fail after this time*/
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mission Settings", meta = (EditCondition = "MissionType == EMissionType::Timed", EditConditionHides))
+    float Time;
 
     /*The Class Of The Next Mission To Start When The Current Mission Is Finished Successfully*/
     UPROPERTY(EditAnywhere, Category = "Mission Settings")
@@ -94,11 +118,11 @@ public:
     TArray<TSubclassOf<UMissionAction>> MissionRequiredActions;
 
     /*Use For UI Only , To Showcase The Status Of Each Mission Task, Use [GetActionInfo()] To Get The Information For Certain Action*/
-    UPROPERTY(EditAnywhere,BlueprintReadWrite, Category = "Mission Settings")
+    UPROPERTY(BlueprintReadWrite, Category = "Mission Settings")
     TArray<FMissionActionStates> MissionActionsState;
 
     /*Actions Done By The Player During This Mission Is Being Active*/
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mission Settings")
+    UPROPERTY()
     TArray<TSubclassOf<UMissionAction>> DoneActions;
 
     // Overriding Tickable object functions 

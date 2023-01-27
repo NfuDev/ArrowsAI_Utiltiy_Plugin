@@ -46,6 +46,8 @@ void UArrowsMissionObject::PostInitProperties()
 		MissionBegin();
 		
 	}
+
+	MissionType = EMissionType::Regulared;
 }
 
 // Tick Event used from engine tickable interface
@@ -141,39 +143,46 @@ bool UArrowsMissionObject::CheckStatesForSucess()
 {
 	TArray<TSubclassOf<UMissionAction>> TempDoneActions;
 	TempDoneActions = DoneActions;//making a copy of the done actions cuz the calculation for success will ruin the source array so we do this 
+
 	bool bAllDone = false;
 	//editing the progress from the done actions and reflect them on the actions state
 	for (auto& State : MissionActionsState)
 	{
-		UMissionAction* ItiratorObject = State.MissionAction.GetDefaultObject();
 
-	   if (ItiratorObject->Countable && !State.Done)
-	   {
-		   for (auto& preformedAction : TempDoneActions)
-		   {
-			   UMissionAction* PreformedActionObject = preformedAction.GetDefaultObject();
+		if (!State.Done)
+		{
+			UMissionAction* ItiratorObject = State.GetMissionDefaults();
 
-			   if (PreformedActionObject == ItiratorObject)
-			   {
-				   State.Count--;
+			if (ItiratorObject->Countable)
+			{
+				for (auto& preformedAction : TempDoneActions)
+				{
+					UMissionAction* PreformedActionObject = preformedAction.GetDefaultObject();
 
-				   if (State.Count <= 0)
-				   {
-					   State.Done = true;
-					   State.Count = 0;
-				   }
-				  
-			   }
-		   }
-	   }
+					if (preformedAction == State.MissionAction)
+					{
+						State.Count--;
 
-	   else
-	   {
-		   if (TempDoneActions.Contains(State.MissionAction))
-		   {
-			   State.Done = true;
-		   }
-	   }
+						if (State.Count <= 0)
+						{
+							State.Done = true;
+							State.Count = 0;
+							TempDoneActions.Remove(State.MissionAction);//so we dont get dublicate results and once action counted as two and everything goes out of sync
+						}
+
+					}
+				}
+			}
+
+			else
+			{
+				if (TempDoneActions.Contains(State.MissionAction))
+				{
+					State.Done = true;
+				}
+			}
+		}
+	  
 	}
 
 	//check for all done here
