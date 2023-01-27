@@ -107,7 +107,13 @@ public:
 
     /*Mission Timer In Seconds, in which the mission will fail after this time*/
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mission Settings", meta = (EditCondition = "MissionType == EMissionType::Timed", EditConditionHides))
-    float Time;
+    float MissionTime;
+
+    UPROPERTY()
+    FTimerHandle MissionTimer;
+
+    UFUNCTION()
+    void MissionTimeOver();
 
     /*The Class Of The Next Mission To Start When The Current Mission Is Finished Successfully*/
     UPROPERTY(EditAnywhere, Category = "Mission Settings")

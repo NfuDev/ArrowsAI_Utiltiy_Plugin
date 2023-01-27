@@ -7,6 +7,14 @@
 void UArrowsMissionObject::MissionBegin_Implementation()
 {
 	InitActionStates();
+
+	if (MissionType == EMissionType::Timed)
+	{
+		if (GetWorld())
+		{
+			GetWorld()->GetTimerManager().SetTimer(MissionTimer, this, &UArrowsMissionObject::MissionTimeOver, MissionTime, false);
+		}
+	}
 }
 
 void UArrowsMissionObject::MissionTick_Implementation(float DeltaTime)
@@ -34,6 +42,10 @@ void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UM
 	}
 }
 
+void UArrowsMissionObject::MissionTimeOver()
+{
+	MissionEnd(false);
+}
 
 // using the post init to simulate begin play which it should be called when game starts and in this case when this object is constructed Put Your Mission Start Logics Here
 void UArrowsMissionObject::PostInitProperties()
