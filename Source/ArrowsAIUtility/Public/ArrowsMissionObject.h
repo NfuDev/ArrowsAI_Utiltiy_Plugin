@@ -4,8 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
-#include "Tickable.h"
 #include "MissionAction.h"
+#include "Tickable.h"
 #include "ArrowsMissionObject.generated.h"
 
 /**
@@ -47,6 +47,23 @@ enum class EMissionType : uint8
     Timed UMETA(DisplayName = "Mission With Timer")
 };
 
+UENUM(BlueprintType)
+enum class EMissionTimerType : uint8
+{
+    TotalSeconds  UMETA(DisplayName = "Total Seconds"),
+    Formatted  UMETA(DisplayName = "Formatted Time")
+};
+
+UENUM(BlueprintType)
+enum class EMissionState : uint8
+{
+    InProgress,
+    Paused,
+    Succeeded,
+    Failed
+};
+
+
 UCLASS(Blueprintable, BlueprintType , meta = (ToolTip= "Simple UObject Handles Missions Basic Functionalities For You"))
 class ARROWSAIUTILITY_API UArrowsMissionObject :  public UObject , public FTickableGameObject
 {
@@ -65,6 +82,14 @@ public:
     /*Called When Mission is Done And Returns A Bolean About it , Called When We add new action done or when mission timer is done*/
     UFUNCTION(BlueprintNativeEvent, meta = (AllowPrivateAcess = true))
     void MissionEnd(bool Success);
+
+    virtual void MissionBegin_Implementation();
+
+    virtual void MissionTick_Implementation(float DeltaTime);
+
+    virtual void MissionEnd_Implementation(bool Success);
+
+    UWorld* GetWorld() const;
 
     /*Call This Function From Assossiated Mission Actors To Tell The Mission That The Certain Action Is Done, Passing Thier Reference To Make Sure The Mission
     Wont Get Confused If Some Actions Are Done And They Are Part Of The Requirements , But not Assossiated With it , Like Killing Enemies , the kill action is general you can kill some enemies 
@@ -90,30 +115,35 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Mission Core", meta = (AllowPrivateAcess = true))
     bool CheckStatesForSucess();
 
-    virtual void MissionBegin_Implementation();
-
-    virtual void MissionTick_Implementation(float DeltaTime);
-
-    virtual void MissionEnd_Implementation(bool Success);
-
-    virtual void PostInitProperties() override;
-
-    UWorld* GetWorld() const;
-   
-   
     /*Define The Mission Behaviour, regular mission with fail when black listed actions happens, timed missions fails when timer is out or black listed actions are done*/
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mission Settings")
     EMissionType MissionType;
 
+    UPROPERTY()
+    EMissionState CurrentMissionState;
+
     /*Mission Timer In Seconds, in which the mission will fail after this time*/
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mission Settings", meta = (EditCondition = "MissionType == EMissionType::Timed", EditConditionHides))
     float MissionTime;
+
+    /*Deifnes the Timer Behaviour of it count down or count up (the count up best use in mission where you need to finish in less time for better score)*/
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mission Settings", meta = (EditCondition = "MissionType == EMissionType::Timed", EditConditionHides))
+    bool CountDown;
 
     UPROPERTY()
     FTimerHandle MissionTimer;
 
     UFUNCTION()
     void MissionTimeOver();
+
+    /*Get The Time For UI Representation , you can get formatted time or get total seconds of needed*/
+    UFUNCTION(BlueprintPure, BlueprintCallable , Category = "Mission Core")
+    void GetMissionTime(EMissionTimerType TimerType, FText& Time, float& Counter);
+
+    /*Called To Pause Mission best use when the mission is timed , and if it used with regular missions it will be okay and prevent [MissionEnd()] calls , but the mission will keep track of progress too
+    and when it is resumed it will call the Mission End Event*/
+    UFUNCTION(BlueprintCallable, Category = "Mission Core")
+    void PauseMission(bool Pause);
 
     /*The Class Of The Next Mission To Start When The Current Mission Is Finished Successfully*/
     UPROPERTY(EditAnywhere, Category = "Mission Settings")
@@ -131,30 +161,31 @@ public:
     UPROPERTY()
     TArray<TSubclassOf<UMissionAction>> DoneActions;
 
-    // Overriding Tickable object functions 
 
-       virtual void Tick(float DeltaTime) override;
 
-       virtual ETickableTickType GetTickableTickType() const override
-       {
-           return ETickableTickType::Always;
-       }
-       virtual TStatId GetStatId() const override
-       {
-           RETURN_QUICK_DECLARE_CYCLE_STAT(UArrowsMissionObject, STATGROUP_Tickables);
-       }
-       virtual bool IsTickableWhenPaused() const
-       {
-           return true;
-       }
-       virtual bool IsTickableInEditor() const
-       {
-           return false;
-       }
 
-private:
-    // The last frame number we were ticked.
-    // We don't want to tick multiple times per frame 
-    uint32 LastFrameNumberWeTicked = INDEX_NONE;
 
+#pragma region ForContext
+    // just so it wont be abstract inhertance
+    // FTickableGameObject Begin
+    virtual void Tick(float DeltaTime) override;
+    virtual ETickableTickType GetTickableTickType() const override
+    {
+        return ETickableTickType::Always;
+    }
+    virtual TStatId GetStatId() const override
+    {
+        RETURN_QUICK_DECLARE_CYCLE_STAT(FMyTickableThing, STATGROUP_Tickables);
+    }
+    virtual bool IsTickableWhenPaused() const
+    {
+        return true;
+    }
+    virtual bool IsTickableInEditor() const
+    {
+        return false;
+    }
+    private:
+       uint32 LastFrameNumberWeTicked = INDEX_NONE;
+#pragma endregion
 };

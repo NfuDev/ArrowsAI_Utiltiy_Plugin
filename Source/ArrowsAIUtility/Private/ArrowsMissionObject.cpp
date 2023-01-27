@@ -2,7 +2,7 @@
 
 
 #include "ArrowsMissionObject.h"
-#include "MissionAction.h"
+#include "Kismet/KismetMathLibrary.h"
 
 void UArrowsMissionObject::MissionBegin_Implementation()
 {
@@ -10,11 +10,16 @@ void UArrowsMissionObject::MissionBegin_Implementation()
 
 	if (MissionType == EMissionType::Timed)
 	{
-		if (GetWorld())
+		
+		GetWorld()->GetTimerManager().SetTimer(MissionTimer, this, &UArrowsMissionObject::MissionTimeOver, MissionTime, false);
+
+		if (GEngine)
 		{
-			GetWorld()->GetTimerManager().SetTimer(MissionTimer, this, &UArrowsMissionObject::MissionTimeOver, MissionTime, false);
+				GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Green, "Parent BeginPlay");
 		}
+		CurrentMissionState = EMissionState::InProgress;
 	}
+
 }
 
 void UArrowsMissionObject::MissionTick_Implementation(float DeltaTime)
@@ -33,10 +38,19 @@ void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UM
 	if (AssossiatedActors.Contains(Source))
 	{
 		DoneActions.Add(PreformedAction);
-		 
-		if (CheckStatesForSucess())//we only care here for true since false just means the player did not finish all tasks yet, the timer will take care of the failed mission case
+
+		if (CurrentMissionState == EMissionState::InProgress)
 		{
-			MissionEnd(true);
+			if (CheckStatesForSucess())//we only care here for true since false just means the player did not finish all tasks yet, the timer will take care of the failed mission case
+			{
+				MissionEnd(true);
+				CurrentMissionState = EMissionState::Succeeded;
+
+				
+				GetWorld()->GetTimerManager().ClearTimer(MissionTimer);
+				MissionTimer.Invalidate();
+
+			}
 		}
 		
 	}
@@ -45,52 +59,55 @@ void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UM
 void UArrowsMissionObject::MissionTimeOver()
 {
 	MissionEnd(false);
+	CurrentMissionState = EMissionState::Failed;
 }
 
-// using the post init to simulate begin play which it should be called when game starts and in this case when this object is constructed Put Your Mission Start Logics Here
-void UArrowsMissionObject::PostInitProperties()
+void UArrowsMissionObject::PauseMission(bool Pause)
 {
-	Super::PostInitProperties();
-	if (GetWorld())
-	{
-
-		MissionBegin_Implementation();
-		MissionBegin();
+		if (Pause)
+		{
+			if (MissionType == EMissionType::Timed)
+			{
+				GetWorld()->GetTimerManager().PauseTimer(MissionTimer);
+			}
+				
+			CurrentMissionState = EMissionState::Paused;
+		}
+		else
+		{
+			if (MissionType == EMissionType::Timed)
+			{
+				GetWorld()->GetTimerManager().UnPauseTimer(MissionTimer);
+			}
+			
+			CurrentMissionState = EMissionState::InProgress;
+		}
 		
-	}
-
-	MissionType = EMissionType::Regulared;
 }
 
-// Tick Event used from engine tickable interface
-void UArrowsMissionObject::Tick(float DeltaTime)
+
+void UArrowsMissionObject::GetMissionTime(EMissionTimerType TimerType, FText& Time, float& Counter)
 {
-
-	if (LastFrameNumberWeTicked == GFrameCounter)
+	if (MissionType == EMissionType::Regulared)
 	{
-			return;
+		Time = FText::FromString("Mission Is Not Timed!");
+		Counter = 0.0f;
 	}
 
-	MissionTick(DeltaTime);
+    else if(MissionType == EMissionType::Timed)
+	{
+		float totalRemaining = CountDown ? FMath::RoundToInt(GetWorld()->GetTimerManager().GetTimerRemaining(MissionTimer)) : FMath::RoundToInt(GetWorld()->GetTimerManager().GetTimerElapsed(MissionTimer));
+			
+			float seconds;
+			int32 Minutes = UKismetMathLibrary::FMod((totalRemaining), 60.0f, seconds);
 
-	LastFrameNumberWeTicked = GFrameCounter;
+			FText TempText = FText::FromString(FString::Printf(TEXT("[ %d : %d ]"), Minutes, FMath::RoundToInt(seconds)));
+			
+			Time = TimerType == EMissionTimerType::TotalSeconds? FText::FromString(FString::FromInt(totalRemaining)) : TempText;
+			Counter = totalRemaining;
+	}
 }
 
-/*Making Sure That The UObject Got A World Reference First Cuz UObjects Are Basic Unreal Classes They Dont Know About The World By Them Self , And They Get The Outter Class When They Are Constructed 
-And The Outter Class Tells it About The World*/
-UWorld* UArrowsMissionObject::GetWorld() const
-{
-	if (GIsEditor && !GIsPlayInEditorWorld)
-	{
-		return nullptr;
-	}
-	else if (GetOuter())
-	{
-		return GetOuter()->GetWorld();
-	}
-	return nullptr;
-
-}
 
 void UArrowsMissionObject::GetActionInfo(FMissionActionStates ActionState, FText& ActionText, int32& _Count, bool& _Done)
 {
@@ -214,4 +231,23 @@ bool UArrowsMissionObject::CheckStatesForSucess()
 void UArrowsMissionObject::AddAssossiatedActor(AActor* Source)
 {
 	AssossiatedActors.AddUnique(Source);
+}
+
+UWorld* UArrowsMissionObject::GetWorld() const
+{
+	// Return pointer to World from object owner, if we don’t work in editor
+	if (GIsEditor && !GIsPlayInEditorWorld)
+	{
+		return nullptr;
+	}
+	else if (GetOuter())
+	{
+		return GetOuter()->GetWorld();
+	}
+	return nullptr;
+}
+
+void UArrowsMissionObject::Tick(float DeltaTime)
+{
+	// it is not used , we get our tick from the component now, this interface causes to many issues , i put it down here just to inheret the blueprint context for gameplay statics functions 
 }

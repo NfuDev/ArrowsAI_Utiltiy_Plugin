@@ -20,8 +20,9 @@ void UArrowsMissionComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
+	StartNewMission(StartupMission);
 	// ...
-	
+
 }
 
 
@@ -29,6 +30,18 @@ void UArrowsMissionComponent::BeginPlay()
 void UArrowsMissionComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
+	if (CurrentMission)
+	{
+	   	CurrentMission->MissionTick(DeltaTime);
+	}
 	// ...
+}
+
+void UArrowsMissionComponent::StartNewMission(TSubclassOf<UArrowsMissionObject> NewMission)
+{
+	CurrentMission =  NewObject<UArrowsMissionObject>(this, NewMission);
+	//CurrentMission->InitActionStates();
+	CurrentMission->MissionBegin_Implementation();
+	CurrentMission->MissionBegin();
+
 }
