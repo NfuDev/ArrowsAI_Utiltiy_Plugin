@@ -266,13 +266,28 @@ public:
 	UPROPERTY(BlueprintReadWrite)
 	TArray<FDetectedObstacles> PointsData;
 
+
 	//Functions NO EXPOSE : 
 	UFUNCTION()
 	void DebugPerception();
 
 	UFUNCTION()
-	void PerceptionUpdate();
+	void PerceptionUpdate();//will be replaced with the new refactored preception update function
 
+	// new logics function
+	UFUNCTION()
+	void NewPerceptionUpdate();
+
+	UFUNCTION()
+	bool TargetInVision();
+
+	UFUNCTION()
+	void OnAgentPerceptionUpdate();
+
+	UFUNCTION()
+	bool HasLineOfSight();
+
+	// end of new logics
 	UFUNCTION()
 	void AwarenessTimer();
 

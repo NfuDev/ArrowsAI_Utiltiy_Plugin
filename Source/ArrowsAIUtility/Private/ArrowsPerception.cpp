@@ -64,7 +64,7 @@ void UArrowsPerception::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	DebugPerception();
-	PerceptionUpdate();//refactor this function later use the new idea of recenlt gained sight , recently lost sight , is currently having sight , is currently not having sight , the currently have and currently not have for tick update since they are called all the time as long as their condition is  correct
+	NewPerceptionUpdate();//refactor this function later use the new idea of recenlt gained sight , recently lost sight , is currently having sight , is currently not having sight , the currently have and currently not have for tick update since they are called all the time as long as their condition is  correct
 	// ...
 }
 
@@ -334,7 +334,8 @@ void UArrowsPerception::RespondToNearAgentReport(UArrowsPerception* Instegator, 
 
 		else
 		{
-			bNearAgentDetects = false; // so we can check it in the forget state so if some agent forgot near by another agent that is nearly to forget they wont repeat the lines
+			bNearAgentDetects = false;
+			bCalledByReport = true; // so we can check it in the forget state so if some agent forgot near by another agent that is nearly to forget they wont repeat the lines
 		}
 	}
 }
@@ -355,6 +356,140 @@ void UArrowsPerception::DelayedReport()
 	}
 }
 #pragma endregion Perception Update
+
+#pragma region NewPerceptionUpdate
+
+void UArrowsPerception::NewPerceptionUpdate()
+{
+	//update awareness value for UI Only
+	if (GetWorld()->GetTimerManager().IsTimerActive(AwarenessTimeHandler))
+	{
+		AgentAwareness = GetWorld()->GetTimerManager().GetTimerElapsed(AwarenessTimeHandler);
+
+	}
+
+	float DistanceToPlayer = (GetOwner()->GetActorLocation() - DivinePlayerRef->GetActorLocation()).Size();
+
+	// for debug only
+	if (bNearAgentDetects)
+	{
+		PrintDebugs("Am Checking Cuz i got report", 0.0f);
+	}
+	
+	if (DistanceToPlayer <= SensingRadius || !bPlayerWasSpotted)
+	{
+		PrintDebugs("Am Thinking", 0.0f);
+
+		if (TargetInVision())
+		{
+			if (HasLineOfSight() && !bHasLineOfSight)
+			{
+				bHasLineOfSight = true;//the variable is to prevent the spam of this part of code
+				OnAgentPerceptionUpdate();
+			}
+			else if (!HasLineOfSight() && bHasLineOfSight)
+			{
+				bHasLineOfSight = false;
+				OnAgentPerceptionUpdate();
+			}
+
+			if(HasLineOfSight())
+				EscapeTransform = DivinePlayerRef->GetActorTransform();
+		}
+
+	}
+
+	else if (bPlayerWasSpotted)
+	{
+		bHasLineOfSight = HasLineOfSight();
+		OnAgentPerceptionUpdate();
+	}
+}
+
+bool UArrowsPerception::TargetInVision()
+{
+	FRotator DirectionTowardsPlayer = (DivinePlayerRef->GetActorLocation() - GetOwner()->GetActorLocation()).Rotation();
+	FRotator SideV = FRotator(0.0f, -VisionConeAngle, 0.0f);
+	FRotator ConeSideVector = SideV.RotateVector(GetOwner()->GetActorRotation().Vector()).Rotation();
+
+	FRotator DeltaRotation = UKismetMathLibrary::NormalizedDeltaRotator(DirectionTowardsPlayer, ConeSideVector);
+
+	return  (DeltaRotation.Yaw >= 0 && DeltaRotation.Yaw <= (2 * VisionConeAngle));
+}
+
+bool UArrowsPerception::HasLineOfSight()
+{
+	FHitResult TraceResults;
+	TArray<AActor*> ActorsToIgnore;
+	FVector Start = GetOwner()->GetActorLocation();
+	FVector End = DivinePlayerRef->GetActorLocation();
+	TArray<TEnumAsByte<EObjectTypeQuery>> TraceObjetcs;
+
+	TraceObjetcs.Add(EObjectTypeQuery::ObjectTypeQuery1);//static objects query channel
+
+	bool hit = UKismetSystemLibrary::LineTraceSingleForObjects(this, Start, End, TraceObjetcs, false, ActorsToIgnore, EDrawDebugTrace::ForOneFrame, TraceResults, true, FColor::Red, FColor::Green, 0.0f);
+
+	return !hit;//inversing the hit value cuz if no hit means yes line of sight
+}
+
+void UArrowsPerception::OnAgentPerceptionUpdate()
+{
+	float DistanceToPlayer = (GetOwner()->GetActorLocation() - DivinePlayerRef->GetActorLocation()).Size();
+
+	if (bHasLineOfSight) // 3 cases , we seen for first time so we start the awareness , we seen him after we lost sight but not for too much to forget
+	{
+
+		float ElapsedForgetTime = GetWorld()->GetTimerManager().IsTimerActive(ForgetTimeHandler)? GetWorld()->GetTimerManager().GetTimerElapsed(ForgetTimeHandler) : 0.0f;
+
+		ClearAndInvalidateTimer(ForgetTimeHandler);
+
+		if (ElapsedForgetTime == 0.0f && !bRecentlyForgot)//fist time seen
+		{
+
+			if (DistanceToPlayer <= ForceFullAwarenessDistance) // seen first time and too close
+			{
+				ClearAndInvalidateTimer(AwarenessTimeHandler);
+				AwarenessTimer();
+			}
+
+			if (!GetWorld()->GetTimerManager().IsTimerActive(AwarenessTimeHandler) && !bPlayerWasSpotted)//so if we had forced detection we dont need to call this logic
+			{
+
+				GetWorld()->GetTimerManager().SetTimer(AwarenessTimeHandler, this, &UArrowsPerception::AwarenessTimer, AwarenessDelay, false);
+			}
+		}
+		
+		else if((ElapsedForgetTime/ MaxMemory > 0.7f) || bRecentlyForgot)//seen after lost sight and before forgetting we force detection 
+		{
+			AgentPlaySound(RegainSightSounds);
+			AwarenessTimer();
+		}
+
+	}
+
+	else // has no line of sight , 2 cases , lost sight after detection so we start forget timer, and lost sight before detection we call the uncertained detection
+	{
+		if ((AgentAwareness / AwarenessDelay >= UncertainedPercent) && !bPlayerWasSpotted && !GetWorld()->GetTimerManager().IsTimerActive(ForgetTimeHandler))//if lose line of sight near to full awareness then call the uncertained detection
+		{
+			AgentAwareness = 0.0f;
+			FVector LastSeen = EscapeTransform.GetLocation();
+			DrawLastSeen();
+
+			UnCertainedDetection.Broadcast(LastSeen);
+			AgentPlaySound(UnCertainedSounds);
+
+			ClearAndInvalidateTimer(AwarenessTimeHandler);
+		}
+
+		else if(bPlayerWasSpotted && !GetWorld()->GetTimerManager().IsTimerActive(ForgetTimeHandler))
+		{
+			bCalledByReport = false;
+			GetWorld()->GetTimerManager().SetTimer(ForgetTimeHandler, this, &UArrowsPerception::ForgettingTimer, MaxMemory, false);
+		}
+
+	}
+}
+#pragma endregion
 
 #pragma region Debugging
 
@@ -440,7 +575,7 @@ void UArrowsPerception::AwarenessTimer()
 	{
 		FTimerHandle ReportHandle;
 		GetWorld()->GetTimerManager().SetTimer(ReportHandle, this, &UArrowsPerception::DelayedReport, 2.0f, false);
-		bNearAgentDetects = false;// very sus code i dont know why, but this is caused due to the change from using bCalledByReport
+		//bNearAgentDetects = false;// very sus code i dont know why, but this is caused due to the change from using bCalledByReport
 	}
 }
 
@@ -460,7 +595,7 @@ void UArrowsPerception::ForgettingTimer()
 
 	InvestigationPoints = CombineHidingPoints();
 	OnAgentForget.Broadcast(InvestigationPoints);
-	if (!bCalledByReport)
+	if(!bCalledByReport)
 	{
 		AgentPlaySound(ForgotSounds);
 	}
