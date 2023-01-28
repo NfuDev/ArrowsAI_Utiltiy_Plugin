@@ -23,6 +23,9 @@ to the class with the name get action info*/
  
  	UPROPERTY(BlueprintReadWrite, EditAnywhere)
  	int32 Count;
+
+    UPROPERTY(BlueprintReadWrite, EditAnywhere)
+    int32 TotalCount;
  
  	UPROPERTY(BlueprintReadWrite, EditAnywhere)
  	bool Done;
@@ -60,6 +63,15 @@ enum class EMissionState : uint8
     Paused,
     Succeeded,
     Failed
+};
+
+UENUM(BlueprintType)
+enum class EActionInfoGetType : uint8
+{
+    Total_Done_Decrementally UMETA(DisplayName = "Total / To Do"),
+    Total_Done_Increamentally  UMETA(DisplayName = "Total / Done"),
+    Done_Decrementally  UMETA(DisplayName = "Get To Do"),
+    Done_Increamentally UMETA(DisplayName = "Get Done")
 };
 
 
@@ -106,7 +118,7 @@ public:
 
     /*Get Specific Action Info For UI Display*/
     UFUNCTION(BlueprintCallable, BlueprintPure ,Category = "Mission Core", meta = (AllowPrivateAcess = true))
-    void GetActionInfo(FMissionActionStates ActionState , FText& ActionText, int32& _Count, bool& _Done);
+    void GetActionInfo(FMissionActionStates ActionState, EActionInfoGetType GetterType, FText& ActionText, int32& _Count, bool& _Done);
 
     UFUNCTION()
     void InitActionStates();
@@ -137,6 +149,7 @@ public:
     UPROPERTY()
     FTimerHandle MissionTimer;
 
+
     UFUNCTION()
     void MissionTimeOver();
 
@@ -166,10 +179,7 @@ public:
     UPROPERTY(BlueprintReadWrite, Category = "Mission Settings")
     TArray<FMissionActionStates> MissionActionsState;
 
-    /*Actions Done By The Player During This Mission Is Being Active*/
-    UPROPERTY(BlueprintReadWrite, Category = "Mission Settings")
-    TArray<TSubclassOf<UMissionAction>> DoneActions;
-
+ 
 
 
 };

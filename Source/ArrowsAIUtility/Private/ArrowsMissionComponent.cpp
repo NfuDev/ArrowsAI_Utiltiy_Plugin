@@ -32,6 +32,7 @@ void UArrowsMissionComponent::TickComponent(float DeltaTime, ELevelTick TickType
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	if (CurrentMission)
 	{
+		CurrentMission->MissionTick_Implementation(DeltaTime);
 	   	CurrentMission->MissionTick(DeltaTime);
 	}
 	// ...

@@ -24,7 +24,13 @@ void UArrowsMissionObject::MissionBegin_Implementation()
 
 void UArrowsMissionObject::MissionTick_Implementation(float DeltaTime)
 {
-   //..
+
+   if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 0.0f, FColor::Green, "Parent tick");
+	}
+
+
 }
 
 void  UArrowsMissionObject::MissionEnd_Implementation(bool Success)
@@ -37,7 +43,6 @@ void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UM
 {
 	if (AssossiatedActors.Contains(Source) && CurrentMissionState == EMissionState::InProgress && !MissionBlackListedActions.Contains(PreformedAction))
 	{
-		DoneActions.Add(PreformedAction);
 		UpdateMissionStates(PreformedAction);
 
 		if (CheckStatesForSucess())//we only care here for true since false just means the player did not finish all tasks yet, the timer will take care of the failed mission case
@@ -102,9 +107,14 @@ void UArrowsMissionObject::GetMissionTime(EMissionTimerType TimerType, FText& Ti
 
     else if(MissionType == EMissionType::Timed)
 	{
-		    float totalRemaining = CountDown ? FMath::RoundToInt(GetWorld()->GetTimerManager().GetTimerRemaining(MissionTimer)) : FMath::RoundToInt(GetWorld()->GetTimerManager().GetTimerElapsed(MissionTimer));
-			
-			totalRemaining = GetWorld()->GetTimerManager().IsTimerActive(MissionTimer) ? totalRemaining : 0.0f;//so we dont get -1 after the missin is failed
+		float totalRemaining;
+
+		if (GetWorld()->GetTimerManager().IsTimerActive(MissionTimer))
+		{
+			 totalRemaining = CountDown ? FMath::RoundToInt(GetWorld()->GetTimerManager().GetTimerRemaining(MissionTimer)) : FMath::RoundToInt(GetWorld()->GetTimerManager().GetTimerElapsed(MissionTimer));
+		}
+		    
+			//totalRemaining = GetWorld()->GetTimerManager().IsTimerActive(MissionTimer) ? totalRemaining : TimeWhenFinished;//so we dont get -1 after the missin is failed
 
 			float seconds;
 			int32 Minutes = UKismetMathLibrary::FMod((totalRemaining), 60.0f, seconds);
@@ -117,20 +127,30 @@ void UArrowsMissionObject::GetMissionTime(EMissionTimerType TimerType, FText& Ti
 }
 
 
-void UArrowsMissionObject::GetActionInfo(FMissionActionStates ActionState, FText& ActionText, int32& _Count, bool& _Done)
+void UArrowsMissionObject::GetActionInfo(FMissionActionStates ActionState, EActionInfoGetType GetterType, FText& ActionText, int32& _Count, bool& _Done)
 {
 	UMissionAction* BaseClass = ActionState.MissionAction.GetDefaultObject();
 
+	bool bDecrement = (GetterType == EActionInfoGetType::Done_Decrementally || GetterType == EActionInfoGetType::Total_Done_Decrementally);
+	
 	bool bIsCountable = BaseClass->Countable;
 	FString TempText = BaseClass->ActionText.ToString();
-	int32 TempCount = ActionState.Count;
+	int32 TempCount = bDecrement? ActionState.Count : (ActionState.TotalCount - ActionState.Count);
 	
 	_Count = TempCount;
 	_Done = ActionState.Done;
 
 	if (bIsCountable)
 	{
-		ActionText = FText::FromString(FString::Printf(TEXT("%s [ %d ]"), *TempText, TempCount));
+		if (GetterType == EActionInfoGetType::Done_Decrementally || GetterType == EActionInfoGetType::Done_Increamentally)
+		{
+			ActionText = FText::FromString(FString::Printf(TEXT("%s [ %d ]"), *TempText, TempCount));
+		}
+
+		else
+		{
+			ActionText = FText::FromString(FString::Printf(TEXT("%s [ %d / %d ]"), *TempText, ActionState.TotalCount, TempCount));
+		}
 	}
 	else
 	{
@@ -157,6 +177,7 @@ void UArrowsMissionObject::InitActionStates()
 			int32 ElementToEditIndex = Indexes.Find(_Index);
 
 			MissionActionsState[ElementToEditIndex].Count++;
+			MissionActionsState[ElementToEditIndex].TotalCount++;
 		}
 
 		else // if it is not found we create a new element and add to the states for UI display
@@ -166,6 +187,7 @@ void UArrowsMissionObject::InitActionStates()
 			FMissionActionStates TempActionState;
 			TempActionState.MissionAction = itr;
 			TempActionState.Count = 1;
+			TempActionState.TotalCount = 1;
 			TempActionState.Done = false;
 
 			MissionActionsState.Add(TempActionState);
