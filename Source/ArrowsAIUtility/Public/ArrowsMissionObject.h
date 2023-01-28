@@ -119,7 +119,7 @@ public:
     UFUNCTION(BlueprintCallable, meta = (AllowPrivateAcess = true))
     void AddAssossiatedActor(AActor* Source);
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shit")
+    UPROPERTY()
     TArray<AActor*> AssossiatedActors;
 
     /*Get Specific Action Info For UI Display*/
@@ -138,18 +138,22 @@ public:
     void UpdateMissionStates(TSubclassOf<UMissionAction> PreformedAction);
 
     /*Define The Mission Behaviour, regular mission with fail when black listed actions happens, timed missions fails when timer is out or black listed actions are done*/
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mission Settings")
+    UPROPERTY(EditAnywhere, Category = "Mission Settings")
     EMissionType MissionType;
 
     UPROPERTY()
     EMissionState CurrentMissionState;
 
     /*Mission Timer In Seconds, in which the mission will fail after this time*/
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mission Settings", meta = (EditCondition = "MissionType == EMissionType::Timed", EditConditionHides))
+    UPROPERTY(EditAnywhere, Category = "Mission Settings", meta = (EditCondition = "MissionType == EMissionType::Timed", EditConditionHides))
     float MissionTime;
 
+    /*Get The Time The User Set For The Mission*/
+    UFUNCTION(BlueprintPure, BlueprintCallable, Category = "Mission Core")
+    FORCEINLINE float GetMissionUserTime(){ return MissionTime; };
+
     /*Deifnes the Timer Behaviour of it count down or count up (the count up best use in mission where you need to finish in less time for better score)*/
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mission Settings", meta = (EditCondition = "MissionType == EMissionType::Timed", EditConditionHides))
+    UPROPERTY(EditAnywhere, Category = "Mission Settings", meta = (EditCondition = "MissionType == EMissionType::Timed", EditConditionHides))
     bool CountDown;
 
     UPROPERTY()
@@ -175,11 +179,11 @@ public:
 
     /*Array Of Actions That Are Required For The Current Mission To Succeed , if there was multiple elements of same action the system will take the first one into consideration, to take 
     them all you need to tick the countable option in the mission action*/
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mission Settings")
+    UPROPERTY(EditAnywhere, Category = "Mission Settings")
     TArray<TSubclassOf<UMissionAction>> MissionRequiredActions;
 
     /*List of actions that if happened the mission is going to fail , like maybe adding a npc death action and if this npc death happened then the mission will fail*/
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mission Settings")
+    UPROPERTY(EditAnywhere, Category = "Mission Settings")
     TArray<TSubclassOf<UMissionAction>> MissionBlackListedActions;
 
     /*Use For UI Only , To Showcase The Status Of Each Mission Task, Use [GetActionInfo()] To Get The Information For Certain Action*/
