@@ -112,7 +112,7 @@ void UArrowsMissionObject::GetMissionTime(EMissionTimerType TimerType, FText& Ti
 
     else if(MissionType == EMissionType::Timed)
 	{
-		float totalRemaining;
+		
 
 		if (GetWorld()->GetTimerManager().IsTimerActive(MissionTimer))
 		{

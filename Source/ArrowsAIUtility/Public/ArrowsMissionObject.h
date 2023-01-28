@@ -155,6 +155,7 @@ public:
     UPROPERTY()
     FTimerHandle MissionTimer;
 
+    float totalRemaining;// moved the decleration here so the call for the function wont reset the value to zero so we can use this value later in the blueprint to check for score or what so ever
 
     UFUNCTION()
     void MissionTimeOver();
