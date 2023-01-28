@@ -5,7 +5,6 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "MissionAction.h"
-#include "Tickable.h"
 #include "ArrowsMissionObject.generated.h"
 
 /**
@@ -65,8 +64,9 @@ enum class EMissionState : uint8
 
 
 UCLASS(Blueprintable, BlueprintType , meta = (ToolTip= "Simple UObject Handles Missions Basic Functionalities For You"))
-class ARROWSAIUTILITY_API UArrowsMissionObject :  public UObject , public FTickableGameObject
+class ARROWSAIUTILITY_API UArrowsMissionObject :  public UObject
 {
+
     GENERATED_BODY()
 
 
@@ -108,12 +108,16 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure ,Category = "Mission Core", meta = (AllowPrivateAcess = true))
     void GetActionInfo(FMissionActionStates ActionState , FText& ActionText, int32& _Count, bool& _Done);
 
-    UFUNCTION(BlueprintCallable, Category = "Mission Core", meta = (AllowPrivateAcess = true))
+    UFUNCTION()
     void InitActionStates();
 
     /*this is a Function to check if all mission requirements are done*/
-    UFUNCTION(BlueprintCallable, Category = "Mission Core", meta = (AllowPrivateAcess = true))
+    UFUNCTION()
     bool CheckStatesForSucess();
+
+    /*Updated logics to keep track of mission progress*/
+    UFUNCTION()
+    void UpdateMissionStates(TSubclassOf<UMissionAction> PreformedAction);
 
     /*Define The Mission Behaviour, regular mission with fail when black listed actions happens, timed missions fails when timer is out or black listed actions are done*/
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mission Settings")
@@ -149,43 +153,23 @@ public:
     UPROPERTY(EditAnywhere, Category = "Mission Settings")
     TSubclassOf<UArrowsMissionObject> NextMission;
 
-    /*Array Of Actions That Are Required For The Current Mission To Succeed*/
+    /*Array Of Actions That Are Required For The Current Mission To Succeed , if there was multiple elements of same action the system will take the first one into consideration, to take 
+    them all you need to tick the countable option in the mission action*/
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mission Settings")
     TArray<TSubclassOf<UMissionAction>> MissionRequiredActions;
+
+    /*List of actions that if happened the mission is going to fail , like maybe adding a npc death action and if this npc death happened then the mission will fail*/
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mission Settings")
+    TArray<TSubclassOf<UMissionAction>> MissionBlackListedActions;
 
     /*Use For UI Only , To Showcase The Status Of Each Mission Task, Use [GetActionInfo()] To Get The Information For Certain Action*/
     UPROPERTY(BlueprintReadWrite, Category = "Mission Settings")
     TArray<FMissionActionStates> MissionActionsState;
 
     /*Actions Done By The Player During This Mission Is Being Active*/
-    UPROPERTY()
+    UPROPERTY(BlueprintReadWrite, Category = "Mission Settings")
     TArray<TSubclassOf<UMissionAction>> DoneActions;
 
 
 
-
-
-#pragma region ForContext
-    // just so it wont be abstract inhertance
-    // FTickableGameObject Begin
-    virtual void Tick(float DeltaTime) override;
-    virtual ETickableTickType GetTickableTickType() const override
-    {
-        return ETickableTickType::Always;
-    }
-    virtual TStatId GetStatId() const override
-    {
-        RETURN_QUICK_DECLARE_CYCLE_STAT(FMyTickableThing, STATGROUP_Tickables);
-    }
-    virtual bool IsTickableWhenPaused() const
-    {
-        return true;
-    }
-    virtual bool IsTickableInEditor() const
-    {
-        return false;
-    }
-    private:
-       uint32 LastFrameNumberWeTicked = INDEX_NONE;
-#pragma endregion
 };

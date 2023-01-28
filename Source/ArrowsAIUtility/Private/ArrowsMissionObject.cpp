@@ -35,24 +35,30 @@ void  UArrowsMissionObject::MissionEnd_Implementation(bool Success)
 
 void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UMissionAction> PreformedAction)
 {
-	if (AssossiatedActors.Contains(Source))
+	if (AssossiatedActors.Contains(Source) && CurrentMissionState == EMissionState::InProgress && !MissionBlackListedActions.Contains(PreformedAction))
 	{
 		DoneActions.Add(PreformedAction);
+		UpdateMissionStates(PreformedAction);
 
-		if (CurrentMissionState == EMissionState::InProgress)
+		if (CheckStatesForSucess())//we only care here for true since false just means the player did not finish all tasks yet, the timer will take care of the failed mission case
 		{
-			if (CheckStatesForSucess())//we only care here for true since false just means the player did not finish all tasks yet, the timer will take care of the failed mission case
-			{
-				MissionEnd(true);
-				CurrentMissionState = EMissionState::Succeeded;
+			MissionEnd(true);
+			CurrentMissionState = EMissionState::Succeeded;
 
 				
-				GetWorld()->GetTimerManager().ClearTimer(MissionTimer);
-				MissionTimer.Invalidate();
-
-			}
+			GetWorld()->GetTimerManager().ClearTimer(MissionTimer);
+			MissionTimer.Invalidate();
 		}
-		
+	}
+
+	else if (MissionBlackListedActions.Contains(PreformedAction))
+	{
+		MissionEnd(false);
+		CurrentMissionState = EMissionState::Failed;
+
+
+		GetWorld()->GetTimerManager().ClearTimer(MissionTimer);
+		MissionTimer.Invalidate();
 	}
 }
 
@@ -96,8 +102,10 @@ void UArrowsMissionObject::GetMissionTime(EMissionTimerType TimerType, FText& Ti
 
     else if(MissionType == EMissionType::Timed)
 	{
-		float totalRemaining = CountDown ? FMath::RoundToInt(GetWorld()->GetTimerManager().GetTimerRemaining(MissionTimer)) : FMath::RoundToInt(GetWorld()->GetTimerManager().GetTimerElapsed(MissionTimer));
+		    float totalRemaining = CountDown ? FMath::RoundToInt(GetWorld()->GetTimerManager().GetTimerRemaining(MissionTimer)) : FMath::RoundToInt(GetWorld()->GetTimerManager().GetTimerElapsed(MissionTimer));
 			
+			totalRemaining = GetWorld()->GetTimerManager().IsTimerActive(MissionTimer) ? totalRemaining : 0.0f;//so we dont get -1 after the missin is failed
+
 			float seconds;
 			int32 Minutes = UKismetMathLibrary::FMod((totalRemaining), 60.0f, seconds);
 
@@ -170,50 +178,7 @@ void UArrowsMissionObject::InitActionStates()
 
 bool UArrowsMissionObject::CheckStatesForSucess()
 {
-	TArray<TSubclassOf<UMissionAction>> TempDoneActions;
-	TempDoneActions = DoneActions;//making a copy of the done actions cuz the calculation for success will ruin the source array so we do this 
-
-	bool bAllDone = false;
-	//editing the progress from the done actions and reflect them on the actions state
-	for (auto& State : MissionActionsState)
-	{
-
-		if (!State.Done)
-		{
-			UMissionAction* ItiratorObject = State.GetMissionDefaults();
-
-			if (ItiratorObject->Countable)
-			{
-				for (auto& preformedAction : TempDoneActions)
-				{
-					UMissionAction* PreformedActionObject = preformedAction.GetDefaultObject();
-
-					if (preformedAction == State.MissionAction)
-					{
-						State.Count--;
-
-						if (State.Count <= 0)
-						{
-							State.Done = true;
-							State.Count = 0;
-							TempDoneActions.Remove(State.MissionAction);//so we dont get dublicate results and once action counted as two and everything goes out of sync
-						}
-
-					}
-				}
-			}
-
-			else
-			{
-				if (TempDoneActions.Contains(State.MissionAction))
-				{
-					State.Done = true;
-				}
-			}
-		}
-	  
-	}
-
+	bool bAllDone;
 	//check for all done here
 	for (auto& State : MissionActionsState)
 	{
@@ -227,6 +192,35 @@ bool UArrowsMissionObject::CheckStatesForSucess()
 
 	return true;
 }
+
+void UArrowsMissionObject::UpdateMissionStates(TSubclassOf<UMissionAction> PreformedAction)
+{
+	UMissionAction* PreformedActionClassDefaults = PreformedAction.GetDefaultObject();
+
+	if (MissionRequiredActions.Contains(PreformedAction))
+	{
+		for (auto& State : MissionActionsState)
+		{
+			if (State.MissionAction == PreformedAction)
+			{
+
+				if (PreformedActionClassDefaults->Countable)
+				{
+					State.Count = State.Count <= 0 ? 0 : --State.Count;
+
+					State.Done = State.Count <= 0;
+				}
+
+				else
+				{
+					State.Done = true;
+				}
+			}
+			
+		}
+	}
+}
+
 
 void UArrowsMissionObject::AddAssossiatedActor(AActor* Source)
 {
@@ -247,7 +241,7 @@ UWorld* UArrowsMissionObject::GetWorld() const
 	return nullptr;
 }
 
-void UArrowsMissionObject::Tick(float DeltaTime)
-{
-	// it is not used , we get our tick from the component now, this interface causes to many issues , i put it down here just to inheret the blueprint context for gameplay statics functions 
-}
+//void UArrowsMissionObject::Tick(float DeltaTime)
+//{
+//	// it is not used , we get our tick from the component now, this interface causes to many issues , i put it down here just to inheret the blueprint context for gameplay statics functions 
+//}
