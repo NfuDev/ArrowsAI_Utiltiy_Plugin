@@ -87,6 +87,10 @@ public:
     UFUNCTION(BlueprintNativeEvent, meta = (AllowPrivateAcess = true))
     void MissionBegin();
 
+    /*Called When Mission Tasks Statues Updates*/
+    UFUNCTION(BlueprintNativeEvent, meta = (AllowPrivateAcess = true))
+    void OnMissionUpdates();
+
     /*Mission Tick , To Further Emplement Mission Logics*/
     UFUNCTION(BlueprintNativeEvent, meta = (AllowPrivateAcess = true))
     void MissionTick(float DeltaTime);
@@ -96,6 +100,8 @@ public:
     void MissionEnd(bool Success);
 
     virtual void MissionBegin_Implementation();
+
+    virtual void OnMissionUpdates_Implementation();
 
     virtual void MissionTick_Implementation(float DeltaTime);
 
@@ -113,7 +119,7 @@ public:
     UFUNCTION(BlueprintCallable, meta = (AllowPrivateAcess = true))
     void AddAssossiatedActor(AActor* Source);
 
-    UPROPERTY()
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shit")
     TArray<AActor*> AssossiatedActors;
 
     /*Get Specific Action Info For UI Display*/

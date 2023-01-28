@@ -13,6 +13,8 @@ UCLASS(Blueprintable, BlueprintType)
 class ARROWSAIUTILITY_API UMissionAction : public UDataAsset
 {
 	GENERATED_BODY()
+
+		UMissionAction();
 	
 public:
 
@@ -21,5 +23,8 @@ public:
 		
 	UPROPERTY(EditAnywhere)
 	bool Countable;
+
+	UPROPERTY(EditAnywhere , meta = (EditCondition = "Countable == true", EditConditionHides))
+	int32 ActionCount;
 
 };

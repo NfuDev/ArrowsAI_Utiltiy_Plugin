@@ -38,6 +38,11 @@ void  UArrowsMissionObject::MissionEnd_Implementation(bool Success)
 	//..
 }
 
+void  UArrowsMissionObject::OnMissionUpdates_Implementation()
+{
+	//..
+}
+
 
 void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UMissionAction> PreformedAction)
 {
@@ -170,14 +175,17 @@ void UArrowsMissionObject::InitActionStates()
 
 	for (auto& itr : MissionRequiredActions)
 	{
+		UMissionAction* ActionObject = itr.GetDefaultObject();
+
 		if (TempStates.Contains(itr))// if it is found in the temp array meaning it was added so we increament the count
 		{
 			int32 _Index = TempStates.Find(itr);
 
 			int32 ElementToEditIndex = Indexes.Find(_Index);
+			
 
-			MissionActionsState[ElementToEditIndex].Count++;
-			MissionActionsState[ElementToEditIndex].TotalCount++;
+			MissionActionsState[ElementToEditIndex].Count += ActionObject->ActionCount;
+			MissionActionsState[ElementToEditIndex].TotalCount = MissionActionsState[ElementToEditIndex].Count;
 		}
 
 		else // if it is not found we create a new element and add to the states for UI display
@@ -186,13 +194,14 @@ void UArrowsMissionObject::InitActionStates()
 
 			FMissionActionStates TempActionState;
 			TempActionState.MissionAction = itr;
-			TempActionState.Count = 1;
-			TempActionState.TotalCount = 1;
+			TempActionState.Count = ActionObject->ActionCount;
+			TempActionState.TotalCount = ActionObject->ActionCount;
 			TempActionState.Done = false;
 
 			MissionActionsState.Add(TempActionState);
 
 			Indexes.Add(_Index);
+
 		}
 	}
 
@@ -240,6 +249,8 @@ void UArrowsMissionObject::UpdateMissionStates(TSubclassOf<UMissionAction> Prefo
 			}
 			
 		}
+
+		OnMissionUpdates();
 	}
 }
 
