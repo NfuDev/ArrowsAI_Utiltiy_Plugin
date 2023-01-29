@@ -40,28 +40,30 @@ void UArrowsMissionComponent::TickComponent(float DeltaTime, ELevelTick TickType
 
 void UArrowsMissionComponent::StartNewMission(TSubclassOf<UArrowsMissionObject> NewMission)
 {
-	bool IsRestarting = false;
 
-	if (CurrentMission)
-	{
-		NewMission = CurrentMission->GetClass();
-
-		IsRestarting = true;
-	}
 	CurrentMission =  NewObject<UArrowsMissionObject>(this, NewMission);
+
 	CurrentMission->MissionComponent = this;
-	CurrentMission->bWasRestarted = IsRestarting;
-	CurrentMission->MissionBegin_Implementation();
-	CurrentMission->MissionBegin();
+	CurrentMission->MissionBegin_Implementation(false);
+	CurrentMission->MissionBegin(false);
 	if (CurrentMission)
 	{
 		if (GEngine)
 		{
-			FString mes = IsRestarting ? "Is Restarting" : "Start New Mission Is Called, new mission successfully started";
+			FString mes = "Start New Mission Is Called, new mission successfully started";
 			GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Green, mes);
 		}
 	}
 
+}
+
+void UArrowsMissionComponent::RestartMission()
+{
+	CurrentMission = NewObject<UArrowsMissionObject>(this, CurrentMission->GetClass());
+
+	CurrentMission->MissionComponent = this;
+	CurrentMission->MissionBegin_Implementation(true);
+	CurrentMission->MissionBegin(true);
 }
 
 void UArrowsMissionComponent::ForceMissionFade()

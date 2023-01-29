@@ -41,4 +41,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Component Core")
 	void ForceMissionFade();
 		
+	UFUNCTION(BlueprintCallable, Category = "Component Core")
+    void RestartMission();
 };

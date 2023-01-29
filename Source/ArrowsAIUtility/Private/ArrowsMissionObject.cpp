@@ -19,9 +19,12 @@ UArrowsMissionObject::UArrowsMissionObject()
 	bWasRestarted = false;
 }
 
-void UArrowsMissionObject::MissionBegin_Implementation()
+void UArrowsMissionObject::MissionBegin_Implementation(bool WasRestarted)
 {
+	bWasRestarted = WasRestarted;
 	InitActionStates();
+	UArrowsMissionObject* ClassDefaultObject = Cast<UArrowsMissionObject>(this->GetClass()->GetDefaultObject());
+	
 
 	if (MissionType == EMissionType::Timed)
 	{
@@ -36,14 +39,9 @@ void UArrowsMissionObject::MissionBegin_Implementation()
 	}
 	
 	//logics to dynamiclly get the place where the mission started so when we restart we set to this location , but if the misson was not in place then this variable should be set by the user in the editor
-	if (MissionInPlace)
+	if (MissionInPlace && !bWasRestarted)
 	{
-		if (!bWasRestarted)
-		{
-			UArrowsMissionObject* ClassDefaultObject =  Cast<UArrowsMissionObject>(this->GetClass()->GetDefaultObject());
-
-			ClassDefaultObject->StartLocation = MissionComponent->GetOwner()->GetActorTransform();// setting the value on the default class instead of instanced pointer so next time when restarting it will be right value
-		}
+	  ClassDefaultObject->StartLocation = MissionComponent->GetOwner()->GetActorTransform();// setting the value on the default class instead of instanced pointer so next time when restarting it will be right value
 	}
 	
 	//setting fade widget reference and starup fade
@@ -61,6 +59,7 @@ void UArrowsMissionObject::MissionBegin_Implementation()
 				MissionComponent->GetOwner()->SetActorTransform(StartLocation);
 				FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Forward);
 			}
+
 			else if (MissionInPlace && !bWasRestarted)
 			{
 				FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Forward, 100.0f);//so we dont see the fade we play it so fast , if we did not play it when the mission start this will make in place missions get a black screen
@@ -69,6 +68,7 @@ void UArrowsMissionObject::MissionBegin_Implementation()
 		}
 	}
 	
+	//ClassDefaultObject->bWasRestarted = false;
 }
 
 void UArrowsMissionObject::MissionTick_Implementation(float DeltaTime)
@@ -80,17 +80,29 @@ void UArrowsMissionObject::MissionTick_Implementation(float DeltaTime)
 void  UArrowsMissionObject::MissionEnd_Implementation(bool Success)
 {
 	//..
-	if (AutoRestart)
+	if (!Success)
 	{
-		FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Reverse);
-		GetWorld()->GetTimerManager().SetTimer(RestartCounter, this, &UArrowsMissionObject::TriggerRestartCounter, 3.0f, false);
-		return;
-	}
+		if (AutoRestart)
+		{
+			FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Reverse);
+			GetWorld()->GetTimerManager().SetTimer(RestartCounter, this, &UArrowsMissionObject::TriggerRestartCounter, 3.0f, false);
+			return;
+		}
+		else
+		{
+			TriggerRestartCounter();
+			return;
+		}
+    }
+
 	else
 	{
-		OnMissionRestart_Implementation();
-		OnMissionRestart();
+	
+		/*UArrowsMissionObject* ClassDefaultObject = Cast<UArrowsMissionObject>(this->GetClass()->GetDefaultObject());
+		ClassDefaultObject->StartLocation = MissionComponent->GetOwner()->GetActorTransform();*/
+		
 	}
+
 }
 
 void  UArrowsMissionObject::OnMissionUpdates_Implementation()
@@ -119,10 +131,14 @@ void  UArrowsMissionObject::ForceFadeAnimation()
 }
 
 //Delay The restart
-void  UArrowsMissionObject::TriggerRestartCounter()
+void  UArrowsMissionObject::TriggerRestartCounter()//this is happening after the screen goes dark after fade animation
 {
+	UArrowsMissionObject* ClassDefaultObject = Cast<UArrowsMissionObject>(this->GetClass()->GetDefaultObject());
+	OnMissionRestart_Implementation();
+	OnMissionRestart();//so the user can clean all things related to the mission and start over
+
 	MissionComponent->GetOwner()->SetActorTransform(StartLocation);
-	MissionComponent->StartNewMission(this->GetClass());
+	MissionComponent->RestartMission();
 }
 
 void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UMissionAction> PreformedAction)
