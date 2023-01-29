@@ -14,6 +14,9 @@ UArrowsMissionObject::UArrowsMissionObject()
 	{
 		FadeWidgetClass = FoundFadeWidgetClass.Class;
 	}
+
+	MissionInPlace = true;
+	bWasRestarted = false;
 }
 
 void UArrowsMissionObject::MissionBegin_Implementation()
@@ -32,6 +35,18 @@ void UArrowsMissionObject::MissionBegin_Implementation()
 		CurrentMissionState = EMissionState::InProgress;
 	}
 	
+	//logics to dynamiclly get the place where the mission started so when we restart we set to this location , but if the misson was not in place then this variable should be set by the user in the editor
+	if (MissionInPlace)
+	{
+		if (!bWasRestarted)
+		{
+			UArrowsMissionObject* ClassDefaultObject =  Cast<UArrowsMissionObject>(this->GetClass()->GetDefaultObject());
+
+			ClassDefaultObject->StartLocation = MissionComponent->GetOwner()->GetActorTransform();// setting the value on the default class instead of instanced pointer so next time when restarting it will be right value
+		}
+	}
+	
+	//setting fade widget reference and starup fade
 	if (IsValid(FadeWidgetClass))
 	{
 		FadeWidget = Cast<UMissionFadeWidget>(CreateWidget(GetWorld(), FadeWidgetClass, FName("FadeWidget")));
@@ -39,7 +54,18 @@ void UArrowsMissionObject::MissionBegin_Implementation()
 		if (FadeWidget)
 		{
 			FadeWidget->AddToViewport(0);
-			FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Forward);
+
+			if (!MissionInPlace || bWasRestarted)
+			{
+				//set the player to start transform here, and use maybe a timer for when the set is done call the fade below there, 
+				MissionComponent->GetOwner()->SetActorTransform(StartLocation);
+				FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Forward);
+			}
+			else if (MissionInPlace && !bWasRestarted)
+			{
+				FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Forward, 100.0f);//so we dont see the fade we play it so fast , if we did not play it when the mission start this will make in place missions get a black screen
+			}
+
 		}
 	}
 	
@@ -56,6 +82,7 @@ void  UArrowsMissionObject::MissionEnd_Implementation(bool Success)
 	//..
 	if (AutoRestart)
 	{
+		FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Reverse);
 		GetWorld()->GetTimerManager().SetTimer(RestartCounter, this, &UArrowsMissionObject::TriggerRestartCounter, 3.0f, false);
 		return;
 	}
@@ -79,12 +106,22 @@ void  UArrowsMissionObject::OnMissionRestart_Implementation()
 
 void  UArrowsMissionObject::ForceFadeAnimation()
 {
+	if (FadeWidget)
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Green, "Fade Was Forced, reference is OK!!");
+		}
+
+		FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Forward);
+	}
 
 }
 
 //Delay The restart
 void  UArrowsMissionObject::TriggerRestartCounter()
 {
+	MissionComponent->GetOwner()->SetActorTransform(StartLocation);
 	MissionComponent->StartNewMission(this->GetClass());
 }
 

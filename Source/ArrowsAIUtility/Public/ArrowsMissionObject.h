@@ -181,9 +181,14 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mission Settings")
     bool MissionTransitionFade;
 
-    /*if the mission starts where the player is and do not set his location , if this is false then you specify a location for the mission to put the player in*/
+    /*if the mission starts where the player is and do not set his location , if this is false then you specify a location for the mission to put the player in, dont forget to set the start transform
+    or the player will be moved to the (0, 0, 0) and fall to the infinity*/
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mission Settings")
     bool MissionInPlace;
+
+
+    UPROPERTY()
+    bool bWasRestarted;
 
     /*Fade Animation Class*/
     UPROPERTY()

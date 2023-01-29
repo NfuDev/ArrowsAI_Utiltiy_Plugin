@@ -38,10 +38,10 @@ void UMissionFadeWidget::NativeConstruct()
 	}
 }
 
-void UMissionFadeWidget::PlayFadeAnimatoin(TEnumAsByte<EUMGSequencePlayMode::Type> FadeMode)
+void UMissionFadeWidget::PlayFadeAnimatoin(TEnumAsByte<EUMGSequencePlayMode::Type> FadeMode, float Rate)
 {
 	if (FadeAnimation)
 	{
-		UUserWidget::PlayAnimation(FadeAnimation, 0.0f, 1, FadeMode, 1.0f, false);
+		UUserWidget::PlayAnimation(FadeAnimation, 0.0f, 1, FadeMode, Rate, false);
 	}
 }
