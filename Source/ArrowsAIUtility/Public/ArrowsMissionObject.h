@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "MissionAction.h"
+#include "MissionFadeWidget.h"
 #include "ArrowsMissionObject.generated.h"
 
 /**
@@ -12,7 +13,7 @@
  */
 
 class UArrowsMissionComponent;
-class UMissionFadeWidget;
+
 
 /*Structure To Hold Each Action And It's State, Done Or Not Done , For UI Porposes, Call [Get UI Text()] To Read This Struct Member , the structure was not okay to expose functions so the functions is moved 
 to the class with the name get action info*/
@@ -198,7 +199,11 @@ public:
     UMissionFadeWidget* FadeWidget;
 
     UFUNCTION()
-    void ForceFadeAnimation();
+    void ForceFadeAnimation();//for internal logic dont expose use the below function to force fade the screen
+
+    /*Fades Out The Screen with the rate givin, best use when you want to start new mission that is not set to [start in place]*/
+    UFUNCTION(BlueprintCallable, Category = "Mission Core")
+    void MissionScreenFade(float Rate);
 
     /*the location where the player should be in the world when the mission is started or restarted */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (EditCondition = "MissionInPlace == false", EditConditionHides), Category = "Mission Settings")

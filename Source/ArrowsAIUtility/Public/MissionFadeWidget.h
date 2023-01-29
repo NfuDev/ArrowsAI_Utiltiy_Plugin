@@ -26,4 +26,5 @@ public:
 	UWidgetAnimation* FadeAnimation;
 
 	void PlayFadeAnimatoin(TEnumAsByte<EUMGSequencePlayMode::Type> FadeMode, float Rate = 1.0f);
+
 };

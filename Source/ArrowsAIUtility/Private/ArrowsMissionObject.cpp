@@ -4,7 +4,7 @@
 #include "ArrowsMissionObject.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "ArrowsMissionComponent.h"
-#include "MissionFadeWidget.h"
+
 
 UArrowsMissionObject::UArrowsMissionObject()
 {
@@ -95,14 +95,6 @@ void  UArrowsMissionObject::MissionEnd_Implementation(bool Success)
 		}
     }
 
-	else
-	{
-	
-		/*UArrowsMissionObject* ClassDefaultObject = Cast<UArrowsMissionObject>(this->GetClass()->GetDefaultObject());
-		ClassDefaultObject->StartLocation = MissionComponent->GetOwner()->GetActorTransform();*/
-		
-	}
-
 }
 
 void  UArrowsMissionObject::OnMissionUpdates_Implementation()
@@ -128,6 +120,11 @@ void  UArrowsMissionObject::ForceFadeAnimation()
 		FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Forward);
 	}
 
+}
+
+void  UArrowsMissionObject::MissionScreenFade(float Rate)
+{
+	FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Reverse, Rate);
 }
 
 //Delay The restart
