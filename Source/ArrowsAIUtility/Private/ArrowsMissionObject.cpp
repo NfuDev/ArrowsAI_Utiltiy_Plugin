@@ -3,6 +3,18 @@
 
 #include "ArrowsMissionObject.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "ArrowsMissionComponent.h"
+#include "MissionFadeWidget.h"
+
+UArrowsMissionObject::UArrowsMissionObject()
+{
+	auto FoundFadeWidgetClass = ConstructorHelpers::FClassFinder<UMissionFadeWidget>(TEXT("/ArrowsAIUtility/Fade.Fade_C"));
+
+	if (FoundFadeWidgetClass.Class)
+	{
+		FadeWidgetClass = FoundFadeWidgetClass.Class;
+	}
+}
 
 void UArrowsMissionObject::MissionBegin_Implementation()
 {
@@ -19,23 +31,39 @@ void UArrowsMissionObject::MissionBegin_Implementation()
 		}
 		CurrentMissionState = EMissionState::InProgress;
 	}
+	
+	if (IsValid(FadeWidgetClass))
+	{
+		FadeWidget = Cast<UMissionFadeWidget>(CreateWidget(GetWorld(), FadeWidgetClass, FName("FadeWidget")));
 
+		if (FadeWidget)
+		{
+			FadeWidget->AddToViewport(0);
+			FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Forward);
+		}
+	}
+	
 }
 
 void UArrowsMissionObject::MissionTick_Implementation(float DeltaTime)
 {
 
-   if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 0.0f, FColor::Green, "Parent tick");
-	}
-
-
+  
 }
 
 void  UArrowsMissionObject::MissionEnd_Implementation(bool Success)
 {
 	//..
+	if (AutoRestart)
+	{
+		GetWorld()->GetTimerManager().SetTimer(RestartCounter, this, &UArrowsMissionObject::TriggerRestartCounter, 3.0f, false);
+		return;
+	}
+	else
+	{
+		OnMissionRestart_Implementation();
+		OnMissionRestart();
+	}
 }
 
 void  UArrowsMissionObject::OnMissionUpdates_Implementation()
@@ -43,6 +71,22 @@ void  UArrowsMissionObject::OnMissionUpdates_Implementation()
 	//..
 }
 
+void  UArrowsMissionObject::OnMissionRestart_Implementation()
+{
+	//..
+
+}
+
+void  UArrowsMissionObject::ForceFadeAnimation()
+{
+
+}
+
+//Delay The restart
+void  UArrowsMissionObject::TriggerRestartCounter()
+{
+	MissionComponent->StartNewMission(this->GetClass());
+}
 
 void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UMissionAction> PreformedAction)
 {
@@ -52,6 +96,7 @@ void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UM
 
 		if (CheckStatesForSucess())//we only care here for true since false just means the player did not finish all tasks yet, the timer will take care of the failed mission case
 		{
+			MissionEnd_Implementation(true);
 			MissionEnd(true);
 			CurrentMissionState = EMissionState::Succeeded;
 
@@ -63,6 +108,7 @@ void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UM
 
 	else if (MissionBlackListedActions.Contains(PreformedAction))
 	{
+		MissionEnd_Implementation(false);
 		MissionEnd(false);
 		CurrentMissionState = EMissionState::Failed;
 
@@ -74,6 +120,7 @@ void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UM
 
 void UArrowsMissionObject::MissionTimeOver()
 {
+	MissionEnd_Implementation(false);
 	MissionEnd(false);
 	CurrentMissionState = EMissionState::Failed;
 }
@@ -273,8 +320,3 @@ UWorld* UArrowsMissionObject::GetWorld() const
 	}
 	return nullptr;
 }
-
-//void UArrowsMissionObject::Tick(float DeltaTime)
-//{
-//	// it is not used , we get our tick from the component now, this interface causes to many issues , i put it down here just to inheret the blueprint context for gameplay statics functions 
-//}

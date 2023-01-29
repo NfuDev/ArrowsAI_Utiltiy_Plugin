@@ -33,10 +33,12 @@ public:
 
 
 	/*Start New Mission*/
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, Category = "Component Core")
 	void StartNewMission(TSubclassOf<UArrowsMissionObject> NewMission);
 
-	
-
+	/*call this if you want a mission to start after a fade , since the start fade only occurs on missions that changes player location so if the first mission does not change the location and
+	you need a fade , use this function to force it*/
+	UFUNCTION(BlueprintCallable, Category = "Component Core")
+	void ForceMissionFade();
 		
 };

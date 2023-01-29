@@ -41,7 +41,9 @@ public class ArrowsAIUtility : ModuleRules
 				"Slate",
 				"SlateCore",
 				"NavigationSystem",
-				"AIModule"
+				"AIModule",
+				"UMG"
+
 				
 				// ... add private dependencies that you statically link with here ...	
 			}

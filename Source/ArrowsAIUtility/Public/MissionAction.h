@@ -21,10 +21,10 @@ public:
 	UPROPERTY(EditAnywhere)
 	FText ActionText;
 		
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	bool Countable;
 
-	UPROPERTY(EditAnywhere , meta = (EditCondition = "Countable == true", EditConditionHides))
+	UPROPERTY(EditAnywhere , BlueprintReadOnly,  meta = (EditCondition = "Countable == true", EditConditionHides))
 	int32 ActionCount;
 
 };

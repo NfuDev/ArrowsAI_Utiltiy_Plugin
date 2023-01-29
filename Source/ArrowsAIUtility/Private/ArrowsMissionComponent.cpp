@@ -41,8 +41,23 @@ void UArrowsMissionComponent::TickComponent(float DeltaTime, ELevelTick TickType
 void UArrowsMissionComponent::StartNewMission(TSubclassOf<UArrowsMissionObject> NewMission)
 {
 	CurrentMission =  NewObject<UArrowsMissionObject>(this, NewMission);
-	//CurrentMission->InitActionStates();
+	CurrentMission->MissionComponent = this;
 	CurrentMission->MissionBegin_Implementation();
 	CurrentMission->MissionBegin();
+	if (CurrentMission)
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Green, "Start New Mission Is Called, new mission successfully started");
+		}
+	}
 
+}
+
+void UArrowsMissionComponent::ForceMissionFade()
+{
+	if (CurrentMission)
+	{
+		CurrentMission->ForceFadeAnimation();
+	}
 }
