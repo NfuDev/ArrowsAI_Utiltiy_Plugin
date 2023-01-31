@@ -3,7 +3,7 @@
 
 #include "ArrowsPathAI.h"
 #include "Components/SplineComponent.h"
-#include "Components/TextRenderComponent.h"
+//#include "Components/TextRenderComponent.h"
 
 // Sets default values
 AArrowsPathAI::AArrowsPathAI()
@@ -14,8 +14,8 @@ AArrowsPathAI::AArrowsPathAI()
 	PatrolingPath = CreateDefaultSubobject<USplineComponent>(TEXT("Spline Path"));
 	PatrolingPath->SetupAttachment(GetRootComponent());
 
-	PointTXT = CreateDefaultSubobject<UTextRenderComponent>(TEXT("Template"));
-	AllPoints.Empty();
+	/*PointTXT = CreateDefaultSubobject<UTextRenderComponent>(TEXT("Template"));
+	AllPoints.Empty();*/
 	//MarkPoint();
 
 }
@@ -43,13 +43,13 @@ void AArrowsPathAI::MarkPoint()
 		FTransform CompTransform;
 		CompTransform.SetLocation(PatrolingPath->GetLocationAtSplinePoint(i, ESplineCoordinateSpace::World));
 
-		UTextRenderComponent* PointText =  Cast<UTextRenderComponent>(AddComponent(FName("P"), true, CompTransform, PointTXT));
+		/*UTextRenderComponent* PointText =  Cast<UTextRenderComponent>(AddComponent(FName("P"), true, CompTransform, PointTXT));
 
 		if (PointText)
 		{
 			PointText->SetText("P" + FString::FromInt(i));
 			PointText->SetRelativeLocation(PatrolingPath->GetScaleAtSplinePoint(i));
-		}
+		}*/
 		
 	}
 	

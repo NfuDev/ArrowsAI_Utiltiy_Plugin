@@ -7,7 +7,7 @@
 #include "Kismet/KismetMathLibrary.h"
 #include <Engine/Classes/GameFramework/Character.h>
 #include "Kismet/GameplayStatics.h"
-
+#include "TimerManager.h"
 
 #include "Blueprint/AIBlueprintHelperLibrary.h"
 
@@ -315,21 +315,37 @@ void UArrowsPerception::ReportNearAgentsWithDetection(bool bIsLost)
 
 void UArrowsPerception::RespondToNearAgentReport(UArrowsPerception* Instegator, bool bIsLost)
 {
-
-	if (bIsLost)//if the agent sent the report and he was detecting the player then we know that the near agent was deteting so we force detection
+	//it is a bad naming if you are reading this, b is lost is used as b i found the player
+	if (bIsLost)//if the agent sent the report and he was detecting the player then we know that the near agent was deteting so we force detection 
 	{
 		bNearAgentDetects = true;
 		bCalledByReport = true;
-		AwarenessTimer();//forcing awareness here too when we hear about the player being spotted by another near by agent
+		ReportedAwareness();//forcing awareness here too when we hear about the player being spotted by another near by agent
 	}
 	else
 	{
+		float ReportDistance = (this->GetOwner()->GetActorLocation() - Instegator->GetOwner()->GetActorLocation()).Size();
+
 		if (bPlayerWasSpotted)// if the agent reported the loss of the player we send a report about we know where he is and force awareness
 		{
-			Instegator->bNearAgentDetects = true;
-			bCalledByReport = true;
-			Instegator->AwarenessTimer();//telling the other agent if he reported that he lost the player , and we have spotted him so we tell him the location of the player by forcing the detection on him
-			AgentPlaySound(ReplyingToDetectionReport);
+			if (HasLineOfSight() && ReportLineOfSightCounter > 0.5)//only tell the reporter who lost the player that i know where he is if i have a line of sight , so they wont keep telling each other and never lose reference or forget
+			{
+				ReportLineOfSightCounter = 0.0f;
+
+				Instegator->bNearAgentDetects = true;
+				bCalledByReport = true;
+				Instegator->ReportedAwareness();//telling the other agent if he reported that he lost the player , and we have spotted him so we tell him the location of the player by forcing the detection on him
+
+				if (ReportDistance >= 600.0f)// if the reporter was too close it is more realistc to follow the one who didnt lose the player yet but if he is too far then the one who did not lose it yet can call him like he is here
+				{
+					AgentPlaySound(ReplyingToDetectionReport);//here is saying the player is here
+				}
+			}
+		
+			else
+			{
+				ReportLineOfSightCounter += 0.05;
+			}
 		}
 
 		else
@@ -354,7 +370,44 @@ void UArrowsPerception::DelayedReport()
 		GetWorld()->GetTimerManager().SetTimer(waitForLinesHandle, this, &UArrowsPerception::DelayedReport, 2.0f, false);
 
 	}
+}// not used anymore
+
+void UArrowsPerception::ReportRegainSight()
+{
+	TArray<FHitResult> TraceResults;
+	TArray<AActor*> ActorsToIgnore;
+	FVector Start = GetOwner()->GetActorLocation(); // start and end are the same since we are checking around in a radius and not actually tracing direction
+	TEnumAsByte<ETraceTypeQuery> TraceChannel;
+	TraceChannel = ETraceTypeQuery::TraceTypeQuery1;
+
+	bool hit = UKismetSystemLibrary::SphereTraceMulti(GetWorld(), Start, Start, AcceptedReportDistance, TraceChannel, false, ActorsToIgnore, EDrawDebugTrace::None, TraceResults, true, FColor::Red, FColor::Green, 10.0f);
+	if (hit)
+	{
+
+		for (auto& SingleHit : TraceResults)
+		{
+			APawn* AgentPawn = Cast<APawn>(SingleHit.GetActor());
+			if (AgentPawn)
+			{
+				UArrowsPerception* OtherPerceptionComponenet = Cast< UArrowsPerception>(SingleHit.GetActor()->GetComponentByClass(UArrowsPerception::StaticClass()));
+
+				if (OtherPerceptionComponenet)
+				{
+					OtherPerceptionComponenet->RecenlyOtherAgentRegained = true;
+					FTimerHandle ResetDelay;
+					GetWorld()->GetTimerManager().SetTimer(ResetDelay, OtherPerceptionComponenet, &UArrowsPerception::ResetRecentlyRegained, 2.0f, false);//call the function on the other components to reset their recent regained value
+				}
+			}
+
+		}
+	}
 }
+
+void UArrowsPerception::ResetRecentlyRegained()
+{
+	RecenlyOtherAgentRegained = false;
+}
+
 #pragma endregion Perception Update
 
 #pragma region NewPerceptionUpdate
@@ -424,10 +477,11 @@ bool UArrowsPerception::HasLineOfSight()
 	FVector Start = GetOwner()->GetActorLocation();
 	FVector End = DivinePlayerRef->GetActorLocation();
 	TArray<TEnumAsByte<EObjectTypeQuery>> TraceObjetcs;
-
+	TEnumAsByte<EDrawDebugTrace::Type> DegubLinetrace = VisionDebug ? EDrawDebugTrace::ForOneFrame : EDrawDebugTrace::None;
+	
 	TraceObjetcs.Add(EObjectTypeQuery::ObjectTypeQuery1);//static objects query channel
 
-	bool hit = UKismetSystemLibrary::LineTraceSingleForObjects(this, Start, End, TraceObjetcs, false, ActorsToIgnore, EDrawDebugTrace::ForOneFrame, TraceResults, true, FColor::Red, FColor::Green, 0.0f);
+	bool hit = UKismetSystemLibrary::LineTraceSingleForObjects(this, Start, End, TraceObjetcs, false, ActorsToIgnore, DegubLinetrace, TraceResults, true, FColor::Red, FColor::Green, 0.0f);
 
 	return !hit;//inversing the hit value cuz if no hit means yes line of sight
 }
@@ -461,8 +515,13 @@ void UArrowsPerception::OnAgentPerceptionUpdate()
 		
 		else if((ElapsedForgetTime/ MaxMemory > 0.7f) || bRecentlyForgot)//seen after lost sight and before forgetting we force detection 
 		{
-			AgentPlaySound(RegainSightSounds);
-			AwarenessTimer();
+			if (!RecenlyOtherAgentRegained)//the variable value is corrosponding with the other near by agent and should be set by a report too
+			{
+				AgentPlaySound(RegainSightSounds);
+				ReportRegainSight();
+			}
+			
+			ReportedAwareness(); // used it cuz it do the same as awareness timer but without the sound so it wont overlap with the regained sound playing 
 		}
 
 	}
@@ -487,17 +546,27 @@ void UArrowsPerception::OnAgentPerceptionUpdate()
 			GetWorld()->GetTimerManager().SetTimer(ForgetTimeHandler, this, &UArrowsPerception::ForgettingTimer, MaxMemory, false);
 		}
 
+		else if (!((AgentAwareness / AwarenessDelay >= UncertainedPercent) && !bPlayerWasSpotted && !GetWorld()->GetTimerManager().IsTimerActive(ForgetTimeHandler)))// the oppiste of the first case
+		{
+			AgentAwareness = 0.0f;
+			ClearAndInvalidateTimer(AwarenessTimeHandler);
+		}
+
 	}
 }
+
 #pragma endregion
 
 #pragma region Debugging
 
 void UArrowsPerception::PrintDebugs(FString DebugMes, float duration)
 {
-	if (GEngine)
+	if (OnScreenDebugs)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, duration, FColor::Green, DebugMes);
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, duration, FColor::Green, DebugMes);
+		}
 	}
 }
 
@@ -536,13 +605,13 @@ void UArrowsPerception::ClearAndInvalidateTimer(FTimerHandle& Timer)
 }
 
 //plays random sound when certain delegate is called 
-void UArrowsPerception::AgentPlaySound(TArray<USoundWave*> Sounds)
+void UArrowsPerception::AgentPlaySound(TArray<USoundBase*> Sounds)
 {
 	// play sound here
 	if (Sounds.Num() > 0)
 	{
 
-		USoundWave* Sound = Sounds[UKismetMathLibrary::RandomIntegerInRange(0, Sounds.Num() - 1)];
+		USoundBase* Sound = Sounds[UKismetMathLibrary::RandomIntegerInRange(0, Sounds.Num() - 1)];
 		
 		
 		if (Sound)
@@ -565,18 +634,28 @@ void UArrowsPerception::AwarenessTimer()
 	PrintDebugs("the awareness funciuon is being called", 3.0f);
 	bPlayerWasSpotted = true;
 	OnPerceptionDetects.Broadcast(DivinePlayerRef);
-	if (!(bRecentlyForgot || bNearAgentDetects) && !bCalledByReport)//making sure that if there are two agents one of them have to scream the lines but the other one do not need to just fire the delegate
-	{
-		AgentPlaySound(SpottedSound);
-		bCalledByReport = false;
-	}
-	
-	if (ReportDetection && !bNearAgentDetects)
-	{
-		FTimerHandle ReportHandle;
-		GetWorld()->GetTimerManager().SetTimer(ReportHandle, this, &UArrowsPerception::DelayedReport, 2.0f, false);
-		//bNearAgentDetects = false;// very sus code i dont know why, but this is caused due to the change from using bCalledByReport
-	}
+	ReportNearAgentsWithDetection(true);
+	AgentPlaySound(SpottedSound);
+	//if (!(bRecentlyForgot || bNearAgentDetects) && !bCalledByReport)//making sure that if there are two agents one of them have to scream the lines but the other one do not need to just fire the delegate
+	//{
+	//	AgentPlaySound(SpottedSound);
+	//	bCalledByReport = false;
+	//}
+	//
+	//if (ReportDetection && !bNearAgentDetects)
+	//{
+	//	FTimerHandle ReportHandle;
+	//	GetWorld()->GetTimerManager().SetTimer(ReportHandle, this, &UArrowsPerception::DelayedReport, 2.0f, false);
+	//	bNearAgentDetects = false;// very sus code i dont know why, but this is caused due to the change from using bCalledByReport
+	//}
+}
+
+/*splitting the awareness logics so we dont need all the variables like bwascalled by report and other complex logics and if statements */
+void UArrowsPerception::ReportedAwareness()
+{
+	ClearAndInvalidateTimer(AwarenessTimeHandler);
+	bPlayerWasSpotted = true;
+	OnPerceptionDetects.Broadcast(DivinePlayerRef);
 }
 
 void UArrowsPerception::ForgettingTimer()
@@ -605,7 +684,7 @@ void UArrowsPerception::ForgettingTimer()
 	{
 		FTimerHandle ReportHandle;
 		GetWorld()->GetTimerManager().SetTimer(ReportHandle, this, &UArrowsPerception::DelayedReport, 3.0f, false);
-		//ReportNearAgentsWithDetection(false);
+		ReportNearAgentsWithDetection(false);
 	}
 }
 

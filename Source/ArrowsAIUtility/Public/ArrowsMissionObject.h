@@ -133,9 +133,11 @@ public:
     UPROPERTY()
     TArray<AActor*> AssossiatedActors;
 
-    /*Get Specific Action Info For UI Display*/
+    /*Get Specific Action Info For UI Display
+    *@param FixTextFormat set true when using arabic fonts that shows brakets flipped
+    */
     UFUNCTION(BlueprintCallable, BlueprintPure ,Category = "Mission Core", meta = (AllowPrivateAcess = true))
-    void GetActionInfo(FMissionActionStates ActionState, EActionInfoGetType GetterType, FText& ActionText, int32& _Count, bool& _Done);
+    void GetActionInfo(FMissionActionStates ActionState, EActionInfoGetType GetterType, bool FixTextFormat, FText& ActionText, int32& _Count, bool& _Done);
 
     UFUNCTION()
     void InitActionStates();
@@ -253,7 +255,7 @@ public:
     UFUNCTION()
     void MissionTimeOver();
 
-    /*Get The Time For UI Representation , you can get formatted time or get total seconds If needed*/
+    /*Get The Time For UI Representation, you can get formatted time or get total seconds If needed*/
     UFUNCTION(BlueprintPure, BlueprintCallable , Category = "Mission Core")
     void GetMissionTime(EMissionTimerType TimerType, FText& Time, float& Counter);
 

@@ -61,7 +61,7 @@ void AArrowsTransformHelperPawn::SetMissionSpawnTransform()
 	{
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Green, "variable was Not ffound");
+			GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Green, "variable Was Not Found, Please Create One First");
 		}
 	}
 
@@ -95,7 +95,7 @@ void AArrowsTransformHelperPawn::FillSpawnTransformArray()
   {
      if (GEngine)
       {
-	  GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Green, "Property was Not found");
+	  GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Green, "Property Was Not found");
       }
   }
 

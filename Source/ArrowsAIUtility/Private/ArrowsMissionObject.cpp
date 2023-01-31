@@ -4,7 +4,8 @@
 #include "ArrowsMissionObject.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "ArrowsMissionComponent.h"
-
+#include "TimerManager.h"
+#include "UObject/ConstructorHelpers.h"
 
 UArrowsMissionObject::UArrowsMissionObject()
 {
@@ -30,11 +31,6 @@ void UArrowsMissionObject::MissionBegin_Implementation(bool WasRestarted)
 	{
 		
 		GetWorld()->GetTimerManager().SetTimer(MissionTimer, this, &UArrowsMissionObject::MissionTimeOver, MissionTime, false);
-
-		if (GEngine)
-		{
-				GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Green, "Parent BeginPlay");
-		}
 		CurrentMissionState = EMissionState::InProgress;
 	}
 	
@@ -85,6 +81,8 @@ void  UArrowsMissionObject::MissionEnd_Implementation(bool Success)
 		if (AutoRestart)
 		{
 			FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Reverse);
+			OnMissionRestart_Implementation();
+			OnMissionRestart();//so the user can clean all things related to the mission and start over // moved here so the blueprint class can handle it's logics during the fade since after the fade ends we lose reference
 			GetWorld()->GetTimerManager().SetTimer(RestartCounter, this, &UArrowsMissionObject::TriggerRestartCounter, 3.0f, false);
 			return;
 		}
@@ -112,11 +110,6 @@ void  UArrowsMissionObject::ForceFadeAnimation()
 {
 	if (FadeWidget)
 	{
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Green, "Fade Was Forced, reference is OK!!");
-		}
-
 		FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Forward);
 	}
 
@@ -131,9 +124,7 @@ void  UArrowsMissionObject::MissionScreenFade(float Rate)
 void  UArrowsMissionObject::TriggerRestartCounter()//this is happening after the screen goes dark after fade animation
 {
 	UArrowsMissionObject* ClassDefaultObject = Cast<UArrowsMissionObject>(this->GetClass()->GetDefaultObject());
-	OnMissionRestart_Implementation();
-	OnMissionRestart();//so the user can clean all things related to the mission and start over
-
+	
 	MissionComponent->GetOwner()->SetActorTransform(StartLocation);
 	MissionComponent->RestartMission();
 }
@@ -229,7 +220,7 @@ void UArrowsMissionObject::GetMissionTime(EMissionTimerType TimerType, FText& Ti
 }
 
 
-void UArrowsMissionObject::GetActionInfo(FMissionActionStates ActionState, EActionInfoGetType GetterType, FText& ActionText, int32& _Count, bool& _Done)
+void UArrowsMissionObject::GetActionInfo(FMissionActionStates ActionState, EActionInfoGetType GetterType, bool FixTextFormat, FText& ActionText, int32& _Count, bool& _Done)
 {
 	UMissionAction* BaseClass = ActionState.MissionAction.GetDefaultObject();
 
@@ -246,12 +237,12 @@ void UArrowsMissionObject::GetActionInfo(FMissionActionStates ActionState, EActi
 	{
 		if (GetterType == EActionInfoGetType::Done_Decrementally || GetterType == EActionInfoGetType::Done_Increamentally)
 		{
-			ActionText = FText::FromString(FString::Printf(TEXT("%s [ %d ]"), *TempText, TempCount));
+			ActionText = FixTextFormat? FText::FromString(FString::Printf(TEXT("%s ] %d ["), *TempText, TempCount)) : FText::FromString(FString::Printf(TEXT("%s [ %d ]"), *TempText, TempCount));
 		}
 
 		else
 		{
-			ActionText = FText::FromString(FString::Printf(TEXT("%s [ %d / %d ]"), *TempText, ActionState.TotalCount, TempCount));
+			ActionText = FixTextFormat? FText::FromString(FString::Printf(TEXT("%s ] %d / %d ["), *TempText, ActionState.TotalCount, TempCount)) : FText::FromString(FString::Printf(TEXT("%s [ %d / %d ]"), *TempText, ActionState.TotalCount, TempCount));
 		}
 	}
 	else

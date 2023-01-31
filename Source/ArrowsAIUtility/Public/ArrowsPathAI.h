@@ -6,7 +6,7 @@
 #include "GameFramework/Actor.h"
 #include "ArrowsPathAI.generated.h"
 
-class UTextRenderComponent;
+//class UTextRenderComponent;
 
 UCLASS()
 class ARROWSAIUTILITY_API AArrowsPathAI : public AActor
@@ -28,11 +28,11 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Arrows AI Utilities")
 	class USplineComponent* PatrolingPath;
 
-	UPROPERTY()
+	/*UPROPERTY()
 	TArray<UTextRenderComponent*> AllPoints;
 
 	UPROPERTY()
-    UTextRenderComponent* PointTXT;
+    UTextRenderComponent* PointTXT;*/
 
 	UFUNCTION(CallInEditor)
 	void MarkPoint();

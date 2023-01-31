@@ -114,28 +114,28 @@ public:
 
 	/*Array Of sound to say when the agent spots the player*/
 	UPROPERTY(EditAnywhere, Category = "Perception Settings")
-		TArray<USoundWave*> SpottedSound;
+		TArray<USoundBase*> SpottedSound;
 
 	/*Array of sounds to say when the agent regain the line of sight before forgetting the player */
 	UPROPERTY(EditAnywhere, Category = "Perception Settings")
-		TArray<USoundWave*> RegainSightSounds;
+		TArray<USoundBase*> RegainSightSounds;
 
 	/*Array of sounds to say after the agent forget about the player*/
 	UPROPERTY(EditAnywhere, Category = "Perception Settings")
-		TArray<USoundWave*> ForgotSounds;
+		TArray<USoundBase*> ForgotSounds;
 
 	/*Array Of sounds to say when the agent is not ceratin about seeing the player , it will play when the agent nearly spotted the player*/
 	UPROPERTY(EditAnywhere, Category = "Perception Settings")
-		TArray<USoundWave*> UnCertainedSounds;
+		TArray<USoundBase*> UnCertainedSounds;
 
 	/*Array of sounds to say when we try to tell other near by agents about detection if they reported lost , made for the case like some agent lost the player and played the forgot sounds then this agent hear that the other has lost 
 	the player and this agent at the same time knows about the player then he will say "he still here" so that the agent who lost the player will know about it again*/
 	UPROPERTY(EditAnywhere, Category = "Perception Settings")
-		TArray<USoundWave*> ReportingDetection;
+		TArray<USoundBase*> ReportingDetection;
 
 	/*Array of sounds to replay to the report, like when the other agent tell us where the player is after we lose him , we say like "thanks i got it" or like "yeah i see him now" */
 	UPROPERTY(EditAnywhere, Category = "Perception Settings")
-		TArray<USoundWave*> ReplyingToDetectionReport;
+		TArray<USoundBase*> ReplyingToDetectionReport;
 
 	/*Called When the perception detects the player and returns the player referece as [Actor] so you can cast to your custom class and do your own custom logics*/
 	 UPROPERTY(BlueprintAssignable, Category = "Perception Settings")
@@ -168,6 +168,9 @@ public:
 	/*Should draw debug shape on the last seen location?*/
 	UPROPERTY(EditAnywhere, Category = "Perception Debug Settings")
 		bool DebugLastSeen;
+
+	UPROPERTY(EditAnywhere, Category = "Perception Debug Settings")
+		bool OnScreenDebugs;
 
 	/*The duration of the last seen debug shape in the world before it get removed*/
 	UPROPERTY(EditAnywhere, Category = "Perception Debug Settings", meta = (EditCondition = "DebugLastSeen", EditConditionHides))
@@ -246,6 +249,13 @@ public:
 	bool bBusyWithLines;
 
 	UPROPERTY()
+	float ReportLineOfSightCounter;
+
+	/*if a near by agent recenlt regained sight and played the sound and i now regained so i dont need to say the sounds and make it feel doublcate*/
+	UPROPERTY()
+    bool RecenlyOtherAgentRegained;
+
+	UPROPERTY()
 	FTransform EscapeTransform;
 
 	UPROPERTY()
@@ -304,7 +314,7 @@ public:
 	void ClearAndInvalidateTimer(FTimerHandle& Timer);
 
 	UFUNCTION()
-	void AgentPlaySound(TArray<USoundWave*> Sounds);
+	void AgentPlaySound(TArray<USoundBase*> Sounds);
 
 	UFUNCTION()
 	void RadialCheck();
@@ -357,6 +367,17 @@ public:
 	void RespondToNearAgentReport(UArrowsPerception* Instegator, bool bIsLost);
 
 
+	/*this should be called when ever some agent says something , the near by enemies should not directly say things after him or say in the same time, there should be like 2 seconds delay*/
+	UFUNCTION()
+	void ReportedAwareness();
+
+	UFUNCTION()
+	void ReportRegainSight();
+
+	UFUNCTION()
+	void ResetRecentlyRegained();
+
+
 	//AI Nutural Behaviours , these are going to be used if the user checked the "Use Arrows Patrol"
 
 	//this will be called everytime the agent forget the player and returns to the nutural state, and then this function will select what behaviour to use 
@@ -392,4 +413,18 @@ public:
 
 	/*now i knew it XDD never use a UFUNCTION with a function with struct paramerters that are not decorated with USTRUCT macro or this will make your life so hard*/
 	void OnAgentMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result);
+
+	//logics needed in my game it is not related to anyother system, but you can use this function and logics to set enemies to split into two groups , allowed to engage and wating to engage
+	// my approace was to make an array with references for those who first saw the player so they fight first depending on a int variable that defines how many per combat are allowed to fight , so if it is set to one 
+	//then only the first one will fight and others will wait and so on , there is a distance based turn switcher so closer enemies while the fights can take places so i need a function to swap the waiters and the allowed
+	// i made it with wildcard types so i can use it for other types
+
+	/*takes two arrays and one element to take from this one to that one and replaces the swapped one in the first array*/
+	/*UFUNCTION(BlueprintCallable, meta = (BlueprintThreadSafe), Category = "Doshka Project")
+	void SwapArrayElements(TArray<FProperty*>& Array1, TArray<FProperty*>& Array2, FProperty* Item);
+
+	NAAAAH i think i'll leave this idea and just use a simple swapping logic i dont need this 
+	
+	*/ 
+    
 };

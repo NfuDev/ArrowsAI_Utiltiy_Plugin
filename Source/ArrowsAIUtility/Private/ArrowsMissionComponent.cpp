@@ -48,11 +48,11 @@ void UArrowsMissionComponent::StartNewMission(TSubclassOf<UArrowsMissionObject> 
 	CurrentMission->MissionBegin(false);
 	if (CurrentMission)
 	{
-		if (GEngine)
+	/*	if (GEngine)
 		{
 			FString mes = "Start New Mission Is Called, new mission successfully started";
 			GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Green, mes);
-		}
+		}*/
 	}
 
 }
