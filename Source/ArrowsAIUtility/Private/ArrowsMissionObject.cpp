@@ -18,6 +18,9 @@ UArrowsMissionObject::UArrowsMissionObject()
 
 	MissionInPlace = true;
 	bWasRestarted = false;
+	AutoRestart = true;
+	AutoGoNextMission = true;
+	AutoCallsDelay = 3.0f;
 }
 
 void UArrowsMissionObject::MissionBegin_Implementation(bool WasRestarted)
@@ -80,20 +83,51 @@ void  UArrowsMissionObject::MissionEnd_Implementation(bool Success)
 	{
 		if (AutoRestart)
 		{
-			FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Reverse);
+			MissionScreenFade(1.0f);//FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Reverse);
 			OnMissionRestart_Implementation();
 			OnMissionRestart();//so the user can clean all things related to the mission and start over // moved here so the blueprint class can handle it's logics during the fade since after the fade ends we lose reference
-			GetWorld()->GetTimerManager().SetTimer(RestartCounter, this, &UArrowsMissionObject::TriggerRestartCounter, 3.0f, false);
+			GetWorld()->GetTimerManager().SetTimer(RestartCounter, this, &UArrowsMissionObject::TriggerRestartCounter, AutoCallsDelay, false);
 			return;
 		}
 		else
 		{
-			TriggerRestartCounter();
+			OnMissionRestart_Implementation();
+			OnMissionRestart();
 			return;
 		}
     }
 
+	else if (AutoGoNextMission)
+	{
+		UArrowsMissionObject* NextMissionClassDefaults = NextMission.GetDefaultObject();
+
+		if (NextMissionClassDefaults->MissionInPlace)
+		{
+			MissionComponent->StartNewMission(NextMission);
+		}
+		
+		else
+		{
+			FTimerHandle FadeTimerHandle;
+			GetWorld()->GetTimerManager().SetTimer(FadeTimerHandle, this, &UArrowsMissionObject::DelayedMissionFade, 2.0f, false);
+		}
+
+	}
+
 }
+
+void  UArrowsMissionObject::DelayedStartNewMission()
+{
+	MissionComponent->StartNewMission(NextMission);
+}
+
+void  UArrowsMissionObject::DelayedMissionFade()
+{
+	MissionScreenFade(1.0f);
+	FTimerHandle NextMissionTimerHandle;
+	GetWorld()->GetTimerManager().SetTimer(NextMissionTimerHandle, this, &UArrowsMissionObject::DelayedStartNewMission, AutoCallsDelay, false);
+}
+
 
 void  UArrowsMissionObject::OnMissionUpdates_Implementation()
 {
@@ -149,6 +183,9 @@ void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UM
 
 	else if (MissionBlackListedActions.Contains(PreformedAction))
 	{
+		FailureCauseAction = PreformedAction;
+		MissionFaluireType = EMissionFaluireType::DoneAction;
+
 		MissionEnd_Implementation(false);
 		MissionEnd(false);
 		CurrentMissionState = EMissionState::Failed;
@@ -161,6 +198,8 @@ void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UM
 
 void UArrowsMissionObject::MissionTimeOver()
 {
+	MissionFaluireType = EMissionFaluireType::Timer;
+
 	MissionEnd_Implementation(false);
 	MissionEnd(false);
 	CurrentMissionState = EMissionState::Failed;
@@ -293,6 +332,7 @@ void UArrowsMissionObject::InitActionStates()
 		}
 	}
 
+	OnTaskActivated(MissionActionsState[0].MissionAction, MissionActionsState[0].GetMissionDefaults()->Countable, MissionActionsState[0].TotalCount);
 }
 
 bool UArrowsMissionObject::CheckStatesForSucess()
@@ -327,12 +367,21 @@ void UArrowsMissionObject::UpdateMissionStates(TSubclassOf<UMissionAction> Prefo
 				{
 					State.Count = State.Count <= 0 ? 0 : --State.Count;
 
-					State.Done = State.Count <= 0;
+				    if (State.Count <= 0 && !State.Done)
+					{
+						State.Done = true;
+						OnActionDone(PreformedAction, State.GetMyIndex(MissionActionsState));
+					}
+					
 				}
 
 				else
 				{
-					State.Done = true;
+					if (!State.Done)
+					{
+						State.Done = true;
+						OnActionDone(PreformedAction, State.GetMyIndex(MissionActionsState));
+					}
 				}
 			}
 			
@@ -360,4 +409,61 @@ UWorld* UArrowsMissionObject::GetWorld() const
 		return GetOuter()->GetWorld();
 	}
 	return nullptr;
+}
+
+TArray<FMissionActionStates> UArrowsMissionObject::GetMissionStatues(EMissionStatusType StatusType)
+{
+	if (StatusType == EMissionStatusType::ShowAll)
+	{
+		return MissionActionsState;
+	}
+	else
+	{
+		TArray<FMissionActionStates> TempStatus;
+		TArray<FMissionActionStates> TempNotDoneStatus;
+
+		if (MissionActionsState.Num() != 0)
+		{
+			//spletting the actions to done and not done , since we need only one action that is not done and all the done , to show all done first and then show one not done , to get
+			//the behaviour of showing first not done and when it is done we show only one other not done so we get one by one 
+			for (auto& itr : MissionActionsState)
+			{
+				if (itr.Done)
+				{
+					TempStatus.Add(itr);
+				}
+				else
+				{
+					TempNotDoneStatus.Add(itr);
+				}
+			}
+
+			if (TempNotDoneStatus.IsValidIndex(0))
+			{
+				TempStatus.Add(TempNotDoneStatus[0]);
+				return TempStatus;
+			}
+
+		}
+
+		return TempStatus; // here if the rest of the actions were all done so they will be in the temp and the not done array will be empty so we return here
+	}
+
+
+}
+
+void UArrowsMissionObject::OnActionDone(TSubclassOf<UMissionAction> DoneAction, int32 Index)//the done action is the previous action, i actually dont need it here now but i have some ideas for it later
+{
+	if (MissionActionsState.IsValidIndex(Index + 1))
+	{
+		FMissionActionStates State = MissionActionsState[Index + 1];
+		UMissionAction* ActionClassDefaults = State.MissionAction.GetDefaultObject();
+
+		OnTaskActivated(State.MissionAction, ActionClassDefaults->Countable, State.TotalCount);
+	}
+}
+
+void UArrowsMissionObject::OnTaskActivated_Implementation(TSubclassOf<UMissionAction> ActivatedAction, bool bIsCountable, int32 Count)
+{
+	//..
 }

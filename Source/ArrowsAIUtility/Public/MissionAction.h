@@ -18,7 +18,7 @@ class ARROWSAIUTILITY_API UMissionAction : public UDataAsset
 	
 public:
 
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	FText ActionText;
 		
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)

@@ -44,6 +44,23 @@ to the class with the name get action info*/
 
         return nullptr;
     }
+
+    int32 GetMyIndex(TArray<FMissionActionStates> InArray)
+    {
+        int32 _Index = 0;
+        for (int i = 0; i <= InArray.Num() - 1; i++)
+        {
+            FMissionActionStates Itirator = InArray[i];
+
+            if (Itirator.MissionAction == MissionAction)
+            {
+                _Index = i;
+                return _Index;
+            }
+        }
+
+        return INDEX_NONE;
+    }
  };
 
 UENUM(BlueprintType)
@@ -67,6 +84,20 @@ enum class EMissionState : uint8
     Paused,
     Succeeded,
     Failed
+};
+
+UENUM(BlueprintType)
+enum class EMissionStatusType : uint8
+{
+    ShowAll UMETA(DisplayName = "All Action Shown"),
+    OneByOne UMETA(DisplayName = "Currently + Next")
+};
+
+UENUM(BlueprintType)
+enum class EMissionFaluireType : uint8
+{
+    Timer UMETA(DisplayName = "Time Out"),
+    DoneAction UMETA(DisplayName = "black listed action")
 };
 
 UENUM(BlueprintType)
@@ -104,9 +135,22 @@ public:
     UFUNCTION(BlueprintNativeEvent, meta = (AllowPrivateAcess = true))
     void MissionEnd(bool Success);
 
-    /*called after failing the mission when auto restart is ON!*/
+    /*called after failing the mission when auto restart is ON!, implement you widget removal and also destroying all actors spwaned by this mission in this event so when the auto restart fires no old data
+    remains , you must remove all data when the mission is auto restarted , do not delay any actions since the auto restart will fire after the fade direcly (you have 3 seconds to clean)*/
     UFUNCTION(BlueprintNativeEvent, meta = (AllowPrivateAcess = true))
     void OnMissionRestart();
+
+    /*use this one when you are using a one by one action statues , so you can excute the logic for specific task only when it is added to the list
+    * @param ActivatedAction the new task that is added to the task list in the ui
+    * @param bIsCountable if it is a countable action or task, so you can decide what to do with the event according to this boolean
+    * @param Count the total count of specific action , this is the sum of all actions from the same class if found multiple in one requirement array 
+    */
+    UFUNCTION(BlueprintNativeEvent, meta = (AllowPrivateAcess = true))
+    void OnTaskActivated(TSubclassOf<UMissionAction> ActivatedAction, bool bIsCountable, int32 Count);
+
+    //to see what next action to activate and call the event
+    UFUNCTION()
+    void OnActionDone(TSubclassOf<UMissionAction> DoneAction, int32 Index);
 
     virtual void MissionBegin_Implementation(bool WasRestarted);
 
@@ -117,6 +161,8 @@ public:
     virtual void MissionEnd_Implementation(bool Success);
 
     virtual void OnMissionRestart_Implementation();
+
+    virtual void OnTaskActivated_Implementation(TSubclassOf<UMissionAction> ActivatedAction, bool bIsCountable, int32 Count);
 
     UWorld* GetWorld() const;
 
@@ -165,6 +211,22 @@ public:
     UPROPERTY()
     EMissionState CurrentMissionState;
 
+    UPROPERTY()
+    EMissionFaluireType MissionFaluireType;
+
+    /*returns the reason for the mission to fail, you can switch on the reason and if it was timer then you can print a message to tell the player so and 
+    if it was action from the black list was done then you can tell that too, this is like "mission faild , NPC died", when the black listed (NPC_Die) happens , this is all just example
+    @returns Reason type [Time Out or Bad thing happened]
+    */
+    UFUNCTION(BlueprintPure, BlueprintCallable, Category = "Mission Core")
+    FORCEINLINE EMissionFaluireType GetMissionFaliureInfo(FText& CausedAction)
+    {
+        UMissionAction* ActionDefaults = FailureCauseAction.GetDefaultObject();
+
+        CausedAction = IsValid(ActionDefaults) ? ActionDefaults->ActionText : FText::FromString("Black Listed Action Happened");
+        return MissionFaluireType;
+    };
+
     /*Mission Timer In Seconds, in which the mission will fail after this time*/
     UPROPERTY(EditAnywhere, Category = "Mission Settings", meta = (EditCondition = "MissionType == EMissionType::Timed", EditConditionHides))
     float MissionTime;
@@ -179,10 +241,19 @@ public:
     UPROPERTY(EditAnywhere, Category = "Mission Settings")
     bool AutoRestart;
 
+    /*if the mission should go to next mission automatically or not*/
+    UPROPERTY(EditAnywhere, Category = "Mission Settings")
+    bool AutoGoNextMission;
+
+
+    /* the delay for the restart or for going to next mission auto calls, this is the time the mission will take before fading in after the fade out */
+    UPROPERTY(EditAnywhere, Category = "Mission Settings")
+    float AutoCallsDelay;
+
     /*should the screen fade when restart or start the mission , this is must use if [mission in place ] boolean was false, meaning the mission will set a new 
     transform for the player, so we fade and hide the transition, if you want to use custom fade disable this option and implement you logic in mission end event and in mission restart event*/
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mission Settings")
-    bool MissionTransitionFade;
+    bool MissionTransitionFade;//No Need For This 
 
     /*if the mission starts where the player is and do not set his location , if this is false then you specify a location for the mission to put the player in, dont forget to set the start transform
     or the player will be moved to the (0, 0, 0) and fall to the infinity*/
@@ -201,11 +272,18 @@ public:
     UMissionFadeWidget* FadeWidget;
 
     UFUNCTION()
-    void ForceFadeAnimation();//for internal logic dont expose use the below function to force fade the screen
+    void ForceFadeAnimation();//for internal logic dont expose use the below function to force fade the screen, this is called via the mission component to force startup fade on missions that are started in place 
 
     /*Fades Out The Screen with the rate givin, best use when you want to start new mission that is not set to [start in place]*/
     UFUNCTION(BlueprintCallable, Category = "Mission Core")
     void MissionScreenFade(float Rate);
+
+    /*To auto start new mission after a delay since this logic i found my self forced to implement in my blueprint logics for all missions so i decided to make it part of the mission core logics*/
+    UFUNCTION()
+    void DelayedStartNewMission();
+
+    UFUNCTION()
+    void DelayedMissionFade();
 
     /*the location where the player should be in the world when the mission is started or restarted */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (EditCondition = "MissionInPlace == false", EditConditionHides), Category = "Mission Settings")
@@ -277,6 +355,10 @@ public:
     UPROPERTY(EditAnywhere, Category = "Mission Settings")
     TArray<TSubclassOf<UMissionAction>> MissionBlackListedActions;
 
+    /*this holds the */
+    UPROPERTY()
+    TSubclassOf<UMissionAction> FailureCauseAction;
+
     /*Use For UI Only , To Showcase The Status Of Each Mission Task, Use [GetActionInfo()] To Get The Information For Certain Action*/
     UPROPERTY(BlueprintReadOnly, Category = "Mission Settings")
     TArray<FMissionActionStates> MissionActionsState;
@@ -286,5 +368,10 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Mission Settings")
     UArrowsMissionComponent* MissionComponent;
 
+    /*here make a function to retrive the mission status according to new enum to represent status type
+    (all shown, or shown one by one after each other when each one is done) and also hide the array so there wont be direct access*/
+
+    UFUNCTION(BlueprintPure, BlueprintCallable, Category = "Mission Core")
+    TArray<FMissionActionStates>GetMissionStatues(EMissionStatusType StatusType);
 
 };
