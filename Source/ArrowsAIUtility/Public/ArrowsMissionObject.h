@@ -136,7 +136,9 @@ public:
     void MissionEnd(bool Success);
 
     /*called after failing the mission when auto restart is ON!, implement you widget removal and also destroying all actors spwaned by this mission in this event so when the auto restart fires no old data
-    remains , you must remove all data when the mission is auto restarted , do not delay any actions since the auto restart will fire after the fade direcly (you have 3 seconds to clean)*/
+    *remains , you must remove all data when the mission is auto restarted , do not delay any actions since the auto restart will fire after the fade direcly (you have 3 seconds to clean)
+    * it wont fire if auto restart is not on, handle all remove logics on the mission end after branching the (is success)
+    */
     UFUNCTION(BlueprintNativeEvent, meta = (AllowPrivateAcess = true))
     void OnMissionRestart();
 
@@ -190,11 +192,14 @@ public:
 
     /*this is a Function to check if all mission requirements are done*/
     UFUNCTION()
-    bool CheckStatesForSucess();
+    bool CheckIfAllDone(TArray<FMissionActionStates> _ActionsArray);
 
     /*Updated logics to keep track of mission progress*/
     UFUNCTION()
     void UpdateMissionStates(TSubclassOf<UMissionAction> PreformedAction);
+
+    UFUNCTION()
+    void UpdateBlackListedStatues(TSubclassOf<UMissionAction> PreformedAction);
 
     /*The Name Of The Mission*/
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mission Settings")
@@ -207,6 +212,11 @@ public:
     /*Define The Mission Behaviour, regular mission with fail when black listed actions happens, timed missions fails when timer is out or black listed actions are done*/
     UPROPERTY(EditAnywhere, Category = "Mission Settings")
     EMissionType MissionType;
+
+    /*Defines the behaviour of showcasing the tasks results on screen if one by one or all shown , the effect of this variable occurs on the "Get Mission Status" Function
+    the results will be either one of those*/
+    UPROPERTY(EditAnywhere, Category = "Mission Settings")
+    EMissionStatusType StatusType;
 
     UPROPERTY()
     EMissionState CurrentMissionState;
@@ -250,10 +260,13 @@ public:
     UPROPERTY(EditAnywhere, Category = "Mission Settings")
     float AutoCallsDelay;
 
+
+    bool DisableMissionFade;
     /*should the screen fade when restart or start the mission , this is must use if [mission in place ] boolean was false, meaning the mission will set a new 
     transform for the player, so we fade and hide the transition, if you want to use custom fade disable this option and implement you logic in mission end event and in mission restart event*/
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mission Settings")
+    UPROPERTY(VisibleAnywhere, meta = (EditCondition = "DisableMissionFade == true"), Category = "Mission Settings")
     bool MissionTransitionFade;//No Need For This 
+
 
     /*if the mission starts where the player is and do not set his location , if this is false then you specify a location for the mission to put the player in, dont forget to set the start transform
     or the player will be moved to the (0, 0, 0) and fall to the infinity*/
@@ -284,6 +297,9 @@ public:
 
     UFUNCTION()
     void DelayedMissionFade();
+
+    UFUNCTION()
+    void DelayedRestartFade();
 
     /*the location where the player should be in the world when the mission is started or restarted */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (EditCondition = "MissionInPlace == false", EditConditionHides), Category = "Mission Settings")
@@ -355,7 +371,10 @@ public:
     UPROPERTY(EditAnywhere, Category = "Mission Settings")
     TArray<TSubclassOf<UMissionAction>> MissionBlackListedActions;
 
-    /*this holds the */
+    UPROPERTY()
+    TArray<TSubclassOf<UMissionAction>> ActivatedActions;
+
+    /*this holds the faluire cause action*/
     UPROPERTY()
     TSubclassOf<UMissionAction> FailureCauseAction;
 
@@ -363,6 +382,8 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Mission Settings")
     TArray<FMissionActionStates> MissionActionsState;
 
+    UPROPERTY(BlueprintReadOnly)
+    TArray<FMissionActionStates> BlackListedActionsStates;
  
     /*Reference to the mission component*/
     UPROPERTY(BlueprintReadOnly, Category = "Mission Settings")
@@ -372,6 +393,6 @@ public:
     (all shown, or shown one by one after each other when each one is done) and also hide the array so there wont be direct access*/
 
     UFUNCTION(BlueprintPure, BlueprintCallable, Category = "Mission Core")
-    TArray<FMissionActionStates>GetMissionStatues(EMissionStatusType StatusType);
+    TArray<FMissionActionStates>GetMissionStatues();
 
 };

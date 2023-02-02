@@ -27,4 +27,8 @@ public:
 	UPROPERTY(EditAnywhere , BlueprintReadOnly,  meta = (EditCondition = "Countable == true", EditConditionHides))
 	int32 ActionCount;
 
+	/*if this action is used as a black listed action , should it instantly cause the mission to fail or it sould wait for other black listed actions to happen*/
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    bool InstantFail;
+
 };

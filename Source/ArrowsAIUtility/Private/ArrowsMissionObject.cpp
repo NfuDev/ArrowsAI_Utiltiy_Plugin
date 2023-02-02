@@ -21,6 +21,7 @@ UArrowsMissionObject::UArrowsMissionObject()
 	AutoRestart = true;
 	AutoGoNextMission = true;
 	AutoCallsDelay = 3.0f;
+	DisableMissionFade = false;
 }
 
 void UArrowsMissionObject::MissionBegin_Implementation(bool WasRestarted)
@@ -83,16 +84,15 @@ void  UArrowsMissionObject::MissionEnd_Implementation(bool Success)
 	{
 		if (AutoRestart)
 		{
-			MissionScreenFade(1.0f);//FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Reverse);
-			OnMissionRestart_Implementation();
-			OnMissionRestart();//so the user can clean all things related to the mission and start over // moved here so the blueprint class can handle it's logics during the fade since after the fade ends we lose reference
-			GetWorld()->GetTimerManager().SetTimer(RestartCounter, this, &UArrowsMissionObject::TriggerRestartCounter, AutoCallsDelay, false);
+			FTimerHandle RestartHandle;
+			GetWorld()->GetTimerManager().SetTimer(RestartHandle, this, &UArrowsMissionObject::DelayedRestartFade, AutoCallsDelay, false);
 			return;
 		}
 		else
 		{
-			OnMissionRestart_Implementation();
-			OnMissionRestart();
+			//OnMissionRestart_Implementation(); i dont want to call the restart event here, first i was thinking to give the user  the ability to have some logics when mission is 
+			// faild so i call the event and dont call the restart, but he can handle this on mission end event no need for this one
+			//OnMissionRestart();
 			return;
 		}
     }
@@ -128,6 +128,13 @@ void  UArrowsMissionObject::DelayedMissionFade()
 	GetWorld()->GetTimerManager().SetTimer(NextMissionTimerHandle, this, &UArrowsMissionObject::DelayedStartNewMission, AutoCallsDelay, false);
 }
 
+void  UArrowsMissionObject::DelayedRestartFade()
+{
+	MissionScreenFade(1.0f);
+	OnMissionRestart_Implementation();
+	OnMissionRestart();//so the user can clean all things related to the mission and start over // moved here so the blueprint class can handle it's logics during the fade since after the fade ends we lose reference
+	GetWorld()->GetTimerManager().SetTimer(RestartCounter, this, &UArrowsMissionObject::TriggerRestartCounter, AutoCallsDelay, false);
+}
 
 void  UArrowsMissionObject::OnMissionUpdates_Implementation()
 {
@@ -169,7 +176,7 @@ void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UM
 	{
 		UpdateMissionStates(PreformedAction);
 
-		if (CheckStatesForSucess())//we only care here for true since false just means the player did not finish all tasks yet, the timer will take care of the failed mission case
+		if (CheckIfAllDone(MissionActionsState))//we only care here for true since false just means the player did not finish all tasks yet, the timer will take care of the failed mission case
 		{
 			MissionEnd_Implementation(true);
 			MissionEnd(true);
@@ -181,18 +188,24 @@ void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UM
 		}
 	}
 
-	else if (MissionBlackListedActions.Contains(PreformedAction))
+	else if (MissionBlackListedActions.Contains(PreformedAction) && AssossiatedActors.Contains(Source) && CurrentMissionState == EMissionState::InProgress)
 	{
-		FailureCauseAction = PreformedAction;
-		MissionFaluireType = EMissionFaluireType::DoneAction;
+		UpdateBlackListedStatues(PreformedAction);
+		UMissionAction* ActionDefaults = PreformedAction.GetDefaultObject();
 
-		MissionEnd_Implementation(false);
-		MissionEnd(false);
-		CurrentMissionState = EMissionState::Failed;
+		if (ActionDefaults->InstantFail || CheckIfAllDone(BlackListedActionsStates))
+		{
+			FailureCauseAction = PreformedAction;
+			MissionFaluireType = EMissionFaluireType::DoneAction;
+
+			MissionEnd_Implementation(false);
+			MissionEnd(false);
+			CurrentMissionState = EMissionState::Failed;
 
 
-		GetWorld()->GetTimerManager().ClearTimer(MissionTimer);
-		MissionTimer.Invalidate();
+			GetWorld()->GetTimerManager().ClearTimer(MissionTimer);
+			MissionTimer.Invalidate();
+		}
 	}
 }
 
@@ -294,6 +307,7 @@ void UArrowsMissionObject::GetActionInfo(FMissionActionStates ActionState, EActi
 void UArrowsMissionObject::InitActionStates()
 {
 	MissionActionsState.Empty();
+	BlackListedActionsStates.Empty();
 
 	TArray<TSubclassOf<UMissionAction>> TempStates;
 	
@@ -332,14 +346,41 @@ void UArrowsMissionObject::InitActionStates()
 		}
 	}
 
-	OnTaskActivated(MissionActionsState[0].MissionAction, MissionActionsState[0].GetMissionDefaults()->Countable, MissionActionsState[0].TotalCount);
+	if (StatusType == EMissionStatusType::ShowAll)
+	{
+		for (FMissionActionStates State : MissionActionsState)
+		{
+			OnTaskActivated(State.MissionAction, State.GetMissionDefaults()->Countable, State.TotalCount);//activate all actions if the getter type was set to (show all) so the activation will work for all of them
+		}
+	}
+
+	if (StatusType == EMissionStatusType::OneByOne)
+	{
+		OnTaskActivated(MissionActionsState[0].MissionAction, MissionActionsState[0].GetMissionDefaults()->Countable, MissionActionsState[0].TotalCount);
+	}
+	
+	//create black list state for each black list action in the list , not taking in mind any doublicates
+	TArray<TSubclassOf<UMissionAction>> TempBlackListedActions;
+
+	for (auto& itr : MissionBlackListedActions)
+	{
+		if (!TempBlackListedActions.Contains(itr))
+		{
+			FMissionActionStates _NewState;
+			_NewState.MissionAction = itr;
+			_NewState.Done = false;
+			BlackListedActionsStates.Add(_NewState);
+			TempBlackListedActions.Add(itr);//removing all instances of this item so we get rid of all doubles 
+		}
+	}
 }
 
-bool UArrowsMissionObject::CheckStatesForSucess()
+
+bool UArrowsMissionObject::CheckIfAllDone(TArray<FMissionActionStates> _ActionsArray)
 {
 	bool bAllDone;
 	//check for all done here
-	for (auto& State : MissionActionsState)
+	for (auto& State : _ActionsArray)
 	{
 		bAllDone = State.Done;
 
@@ -370,7 +411,9 @@ void UArrowsMissionObject::UpdateMissionStates(TSubclassOf<UMissionAction> Prefo
 				    if (State.Count <= 0 && !State.Done)
 					{
 						State.Done = true;
-						OnActionDone(PreformedAction, State.GetMyIndex(MissionActionsState));
+
+						if(StatusType == EMissionStatusType::OneByOne) OnActionDone(PreformedAction, State.GetMyIndex(MissionActionsState));
+						
 					}
 					
 				}
@@ -380,7 +423,7 @@ void UArrowsMissionObject::UpdateMissionStates(TSubclassOf<UMissionAction> Prefo
 					if (!State.Done)
 					{
 						State.Done = true;
-						OnActionDone(PreformedAction, State.GetMyIndex(MissionActionsState));
+						if (StatusType == EMissionStatusType::OneByOne) OnActionDone(PreformedAction, State.GetMyIndex(MissionActionsState));
 					}
 				}
 			}
@@ -389,6 +432,22 @@ void UArrowsMissionObject::UpdateMissionStates(TSubclassOf<UMissionAction> Prefo
 
 		OnMissionUpdates();
 	}
+}
+
+
+void UArrowsMissionObject::UpdateBlackListedStatues(TSubclassOf<UMissionAction> PreformedAction)
+{
+	if (MissionBlackListedActions.Contains(PreformedAction))
+	{
+		for (auto& blackListedState : BlackListedActionsStates)
+		{
+			if (blackListedState.MissionAction == PreformedAction)
+			{
+				if(!blackListedState.Done) blackListedState.Done = true;
+			}
+		}
+	}
+
 }
 
 
@@ -411,7 +470,7 @@ UWorld* UArrowsMissionObject::GetWorld() const
 	return nullptr;
 }
 
-TArray<FMissionActionStates> UArrowsMissionObject::GetMissionStatues(EMissionStatusType StatusType)
+TArray<FMissionActionStates> UArrowsMissionObject::GetMissionStatues()
 {
 	if (StatusType == EMissionStatusType::ShowAll)
 	{
