@@ -26,6 +26,7 @@ UArrowsMissionObject::UArrowsMissionObject()
 
 void UArrowsMissionObject::MissionBegin_Implementation(bool WasRestarted)
 {
+	CurrentMissionState = EMissionState::InProgress;
 	bWasRestarted = WasRestarted;
 	InitActionStates();
 	UArrowsMissionObject* ClassDefaultObject = Cast<UArrowsMissionObject>(this->GetClass()->GetDefaultObject());
@@ -33,9 +34,8 @@ void UArrowsMissionObject::MissionBegin_Implementation(bool WasRestarted)
 
 	if (MissionType == EMissionType::Timed)
 	{
-		
-		GetWorld()->GetTimerManager().SetTimer(MissionTimer, this, &UArrowsMissionObject::MissionTimeOver, MissionTime, false);
-		CurrentMissionState = EMissionState::InProgress;
+		TimeCounter = CountDown ? MissionTime : 0.0f;
+		GetWorld()->GetTimerManager().SetTimer(MissionTimer, this, &UArrowsMissionObject::MissionTimeOver, 1.0f, true);
 	}
 	
 	//logics to dynamiclly get the place where the mission started so when we restart we set to this location , but if the misson was not in place then this variable should be set by the user in the editor
@@ -172,7 +172,12 @@ void  UArrowsMissionObject::TriggerRestartCounter()//this is happening after the
 
 void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UMissionAction> PreformedAction)
 {
-	if (AssossiatedActors.Contains(Source) && CurrentMissionState == EMissionState::InProgress && !MissionBlackListedActions.Contains(PreformedAction))
+	//those to prevent game crash if the user forgot to feed any actions to the lists 
+	bool UpdateStateCondition = MissionActionsState.Num() > 0 && MissionRequiredActions.Contains(PreformedAction);
+	bool UpdateBlackListCondtion = BlackListedActionsStates.Num() > 0 && MissionBlackListedActions.Contains(PreformedAction);
+	bool CallBounceCondition = MissionBounce.Num() > 0 && BounceActionsStates.Num() > 0 && MissionBounce.Contains(PreformedAction);
+
+	if (UpdateStateCondition && AssossiatedActors.Contains(Source) && CurrentMissionState == EMissionState::InProgress && !MissionBlackListedActions.Contains(PreformedAction))
 	{
 		UpdateMissionStates(PreformedAction);
 
@@ -186,9 +191,10 @@ void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UM
 			GetWorld()->GetTimerManager().ClearTimer(MissionTimer);
 			MissionTimer.Invalidate();
 		}
+
 	}
 
-	else if (MissionBlackListedActions.Contains(PreformedAction) && AssossiatedActors.Contains(Source) && CurrentMissionState == EMissionState::InProgress)
+	else if (UpdateBlackListCondtion && AssossiatedActors.Contains(Source) && CurrentMissionState == EMissionState::InProgress)
 	{
 		UpdateBlackListedStatues(PreformedAction);
 		UMissionAction* ActionDefaults = PreformedAction.GetDefaultObject();
@@ -206,16 +212,37 @@ void UArrowsMissionObject::MissionActionPreformed(AActor* Source, TSubclassOf<UM
 			GetWorld()->GetTimerManager().ClearTimer(MissionTimer);
 			MissionTimer.Invalidate();
 		}
+
 	}
+
+	else if (CallBounceCondition && AssossiatedActors.Contains(Source) && CurrentMissionState == EMissionState::InProgress)
+	{
+		int32 Index = GetActionIndex(BounceActionsStates, PreformedAction);
+		if (!BounceActionsStates[Index].Done)//to make sure we get the bounce only once
+		{
+			OnActionDone(PreformedAction, Index, false);
+			BounceActionsStates[Index].Done = true;
+		}
+	}
+
 }
 
 void UArrowsMissionObject::MissionTimeOver()
 {
-	MissionFaluireType = EMissionFaluireType::Timer;
+	TimeCounter = CountDown? --TimeCounter : ++TimeCounter;
+	bool timeOverCondition = CountDown ? TimeCounter <= 0 : TimeCounter >= MissionTime;
+	if (timeOverCondition)
+	{
+		GetWorld()->GetTimerManager().ClearTimer(MissionTimer);
+		MissionTimer.Invalidate();
+		TimeCounter = CountDown ? 0.0f :MissionTime;
 
-	MissionEnd_Implementation(false);
-	MissionEnd(false);
-	CurrentMissionState = EMissionState::Failed;
+		MissionFaluireType = EMissionFaluireType::Timer;
+
+		MissionEnd_Implementation(false);
+		MissionEnd(false);
+		CurrentMissionState = EMissionState::Failed;
+	}
 }
 
 void UArrowsMissionObject::PauseMission(bool Pause)
@@ -250,15 +277,17 @@ void UArrowsMissionObject::GetMissionTime(EMissionTimerType TimerType, FText& Ti
 		Counter = 0.0f;
 	}
 
-    else if(MissionType == EMissionType::Timed)
+    else if(MissionType == EMissionType::Timed) 
 	{
 		
 
-		if (GetWorld()->GetTimerManager().IsTimerActive(MissionTimer))
-		{
-			 totalRemaining = CountDown ? FMath::RoundToInt(GetWorld()->GetTimerManager().GetTimerRemaining(MissionTimer)) : FMath::RoundToInt(GetWorld()->GetTimerManager().GetTimerElapsed(MissionTimer));
-		}
-		    
+		//if (GetWorld()->GetTimerManager().IsTimerActive(MissionTimer))
+		//{
+		//	// totalRemaining = CountDown ? FMath::RoundToInt(GetWorld()->GetTimerManager().GetTimerRemaining(MissionTimer)) : FMath::RoundToInt(GetWorld()->GetTimerManager().GetTimerElapsed(MissionTimer));
+		//	totalRemaining = TimeCounter;
+		//}
+
+		    totalRemaining = TimeCounter;
 			//totalRemaining = GetWorld()->GetTimerManager().IsTimerActive(MissionTimer) ? totalRemaining : TimeWhenFinished;//so we dont get -1 after the missin is failed
 
 			float seconds;
@@ -308,69 +337,113 @@ void UArrowsMissionObject::InitActionStates()
 {
 	MissionActionsState.Empty();
 	BlackListedActionsStates.Empty();
+	BounceActionsStates.Empty();
 
 	TArray<TSubclassOf<UMissionAction>> TempStates;
 	
 	TArray<int32> Indexes;
 
-
-	for (auto& itr : MissionRequiredActions)
+	if (MissionRequiredActions.Num() > 0)
 	{
-		UMissionAction* ActionObject = itr.GetDefaultObject();
 
-		if (TempStates.Contains(itr))// if it is found in the temp array meaning it was added so we increament the count
+		for (auto& itr : MissionRequiredActions)
 		{
-			int32 _Index = TempStates.Find(itr);
+			UMissionAction* ActionObject = itr.GetDefaultObject();
 
-			int32 ElementToEditIndex = Indexes.Find(_Index);
-			
+			if (TempStates.Contains(itr))// if it is found in the temp array meaning it was added so we increament the count
+			{
+				int32 _Index = TempStates.Find(itr);
 
-			MissionActionsState[ElementToEditIndex].Count += ActionObject->ActionCount;
-			MissionActionsState[ElementToEditIndex].TotalCount = MissionActionsState[ElementToEditIndex].Count;
+				int32 ElementToEditIndex = Indexes.Find(_Index);
+
+
+				MissionActionsState[ElementToEditIndex].Count += ActionObject->ActionCount;
+				MissionActionsState[ElementToEditIndex].TotalCount = MissionActionsState[ElementToEditIndex].Count;
+			}
+
+			else // if it is not found we create a new element and add to the states for UI display
+			{
+				int32 _Index = TempStates.Add(itr);
+
+				FMissionActionStates TempActionState;
+				TempActionState.MissionAction = itr;
+				TempActionState.Count = ActionObject->ActionCount;
+				TempActionState.TotalCount = ActionObject->ActionCount;
+				TempActionState.Done = false;
+
+				MissionActionsState.Add(TempActionState);
+
+				Indexes.Add(_Index);
+
+			}
 		}
 
-		else // if it is not found we create a new element and add to the states for UI display
+		if (StatusType == EMissionStatusType::ShowAll)
 		{
-			int32 _Index = TempStates.Add(itr);
-
-			FMissionActionStates TempActionState;
-			TempActionState.MissionAction = itr;
-			TempActionState.Count = ActionObject->ActionCount;
-			TempActionState.TotalCount = ActionObject->ActionCount;
-			TempActionState.Done = false;
-
-			MissionActionsState.Add(TempActionState);
-
-			Indexes.Add(_Index);
-
+			for (FMissionActionStates State : MissionActionsState)
+			{
+				OnTaskActivated(State.MissionAction, State.GetMissionDefaults()->Countable, State.TotalCount);//activate all actions if the getter type was set to (show all) so the activation will work for all of them
+			}
 		}
-	}
 
-	if (StatusType == EMissionStatusType::ShowAll)
-	{
-		for (FMissionActionStates State : MissionActionsState)
+		if (StatusType == EMissionStatusType::OneByOne)
 		{
-			OnTaskActivated(State.MissionAction, State.GetMissionDefaults()->Countable, State.TotalCount);//activate all actions if the getter type was set to (show all) so the activation will work for all of them
+			OnTaskActivated(MissionActionsState[0].MissionAction, MissionActionsState[0].GetMissionDefaults()->Countable, MissionActionsState[0].TotalCount);
+			ActivatedActions.Add(MissionActionsState[0].MissionAction);
 		}
-	}
 
-	if (StatusType == EMissionStatusType::OneByOne)
-	{
-		OnTaskActivated(MissionActionsState[0].MissionAction, MissionActionsState[0].GetMissionDefaults()->Countable, MissionActionsState[0].TotalCount);
 	}
-	
 	//create black list state for each black list action in the list , not taking in mind any doublicates
 	TArray<TSubclassOf<UMissionAction>> TempBlackListedActions;
-
-	for (auto& itr : MissionBlackListedActions)
+	if (MissionBlackListedActions.Num() > 0)
 	{
-		if (!TempBlackListedActions.Contains(itr))
+
+		for (auto& itr : MissionBlackListedActions)
 		{
-			FMissionActionStates _NewState;
-			_NewState.MissionAction = itr;
-			_NewState.Done = false;
-			BlackListedActionsStates.Add(_NewState);
-			TempBlackListedActions.Add(itr);//removing all instances of this item so we get rid of all doubles 
+			if (!TempBlackListedActions.Contains(itr))
+			{
+				FMissionActionStates _NewState;
+				_NewState.MissionAction = itr;
+				_NewState.Done = false;
+				BlackListedActionsStates.Add(_NewState);
+				TempBlackListedActions.Add(itr);//removing all instances of this item so we get rid of all doubles 
+			}
+		}
+	}
+
+	// create bounce states for the bounce actions , the states are needed just to calculate the total count if the user used multiple instance of same action so we combine the count, here i dont think it is 
+	// nessessary to do i guess 
+	TempStates.Empty();//reusing the past temp array that is used for main actions 
+	Indexes.Empty();
+	if (MissionBounce.Num() > 0)
+	{
+
+		for (auto& itr : MissionBounce)
+		{
+			if (TempStates.Contains(itr))
+			{
+				//the reason for this logic and the one used with the main actoins is we have two arrays that are not growing in the same pasing , maybe 3 actions are added to the same state , 
+				//so (0 ,1 ,2) are all found in the index (0) in the states so we find where the state using saved index when we created the state for the action, planning to refactor the logic into one function
+				int32 _Index = TempStates.Find(itr);
+				int32 ElementToEdit = Indexes.Find(_Index);
+				BounceActionsStates[ElementToEdit].Count += itr.GetDefaultObject()->ActionCount;
+				BounceActionsStates[ElementToEdit].TotalCount = BounceActionsStates[ElementToEdit].Count;
+			}
+			else
+			{
+				int32 _Index = TempStates.Add(itr);
+
+				FMissionActionStates TempActionState;
+				TempActionState.MissionAction = itr;
+				TempActionState.Count = itr.GetDefaultObject()->ActionCount;
+				TempActionState.TotalCount = itr.GetDefaultObject()->ActionCount;
+				TempActionState.Done = false;
+
+				BounceActionsStates.Add(TempActionState);
+
+				Indexes.Add(_Index);
+
+			}
 		}
 	}
 }
@@ -397,7 +470,9 @@ void UArrowsMissionObject::UpdateMissionStates(TSubclassOf<UMissionAction> Prefo
 {
 	UMissionAction* PreformedActionClassDefaults = PreformedAction.GetDefaultObject();
 
-	if (MissionRequiredActions.Contains(PreformedAction))
+	bool UpdateCondition = StatusType == EMissionStatusType::OneByOne ? ActivatedActions.Contains(PreformedAction) : true;
+
+	if (MissionRequiredActions.Contains(PreformedAction) && UpdateCondition)
 	{
 		for (auto& State : MissionActionsState)
 		{
@@ -412,7 +487,7 @@ void UArrowsMissionObject::UpdateMissionStates(TSubclassOf<UMissionAction> Prefo
 					{
 						State.Done = true;
 
-						if(StatusType == EMissionStatusType::OneByOne) OnActionDone(PreformedAction, State.GetMyIndex(MissionActionsState));
+						 OnActionDone(PreformedAction, State.GetMyIndex(MissionActionsState), true);
 						
 					}
 					
@@ -423,7 +498,7 @@ void UArrowsMissionObject::UpdateMissionStates(TSubclassOf<UMissionAction> Prefo
 					if (!State.Done)
 					{
 						State.Done = true;
-						if (StatusType == EMissionStatusType::OneByOne) OnActionDone(PreformedAction, State.GetMyIndex(MissionActionsState));
+					    OnActionDone(PreformedAction, State.GetMyIndex(MissionActionsState), true);
 					}
 				}
 			}
@@ -511,18 +586,39 @@ TArray<FMissionActionStates> UArrowsMissionObject::GetMissionStatues()
 
 }
 
-void UArrowsMissionObject::OnActionDone(TSubclassOf<UMissionAction> DoneAction, int32 Index)//the done action is the previous action, i actually dont need it here now but i have some ideas for it later
+void UArrowsMissionObject::OnActionDone(TSubclassOf<UMissionAction> DoneAction, int32 Index, bool bIsMainAction)//the done action is the previous action, i actually dont need it here now but i have some ideas for it later
 {
-	if (MissionActionsState.IsValidIndex(Index + 1))
+	//check for main action activation , cuz this function is used to handle the optional actions too so we check if the done action is main one so we activate the next
+	if (bIsMainAction)
 	{
-		FMissionActionStates State = MissionActionsState[Index + 1];
-		UMissionAction* ActionClassDefaults = State.MissionAction.GetDefaultObject();
+		if (StatusType == EMissionStatusType::OneByOne)
+		{
+			if (MissionActionsState.IsValidIndex(Index + 1))
+			{
+				FMissionActionStates State = MissionActionsState[Index + 1];
+				UMissionAction* ActionClassDefaults = State.MissionAction.GetDefaultObject();
 
-		OnTaskActivated(State.MissionAction, ActionClassDefaults->Countable, State.TotalCount);
+				OnTaskActivated(State.MissionAction, ActionClassDefaults->Countable, State.TotalCount);
+				ActivatedActions.Add(State.MissionAction);
+			}
+		}
+
+		OnTaskDone(DoneAction, DoneAction.GetDefaultObject()->Countable, MissionActionsState[Index].TotalCount);
 	}
+
+	else
+	{
+		OnTaskDone(DoneAction, DoneAction.GetDefaultObject()->Countable, BounceActionsStates[Index].TotalCount);
+	}
+	
 }
 
-void UArrowsMissionObject::OnTaskActivated_Implementation(TSubclassOf<UMissionAction> ActivatedAction, bool bIsCountable, int32 Count)
+void UArrowsMissionObject::OnTaskActivated_Implementation(TSubclassOf<UMissionAction> DoneAction, bool bIsCountable, int32 Count)
+{
+	//..
+}
+
+void UArrowsMissionObject::OnTaskDone_Implementation(TSubclassOf<UMissionAction> DoneAction, bool bIsCountable, int32 Count)
 {
 	//..
 }

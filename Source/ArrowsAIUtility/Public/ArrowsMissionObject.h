@@ -150,9 +150,13 @@ public:
     UFUNCTION(BlueprintNativeEvent, meta = (AllowPrivateAcess = true))
     void OnTaskActivated(TSubclassOf<UMissionAction> ActivatedAction, bool bIsCountable, int32 Count);
 
+    /*called when ever a task is done or an optional action is done too , so you can do some logics accordingly, like checking if one of the bounce actions is done so the player get more time or score*/
+    UFUNCTION(BlueprintNativeEvent, meta = (AllowPrivateAcess = true))
+    void OnTaskDone(TSubclassOf<UMissionAction> DoneAction, bool bIsCountable, int32 Count);
+
     //to see what next action to activate and call the event
     UFUNCTION()
-    void OnActionDone(TSubclassOf<UMissionAction> DoneAction, int32 Index);
+    void OnActionDone(TSubclassOf<UMissionAction> DoneAction, int32 Index, bool bIsMainAction);
 
     virtual void MissionBegin_Implementation(bool WasRestarted);
 
@@ -165,6 +169,8 @@ public:
     virtual void OnMissionRestart_Implementation();
 
     virtual void OnTaskActivated_Implementation(TSubclassOf<UMissionAction> ActivatedAction, bool bIsCountable, int32 Count);
+
+    virtual void OnTaskDone_Implementation(TSubclassOf<UMissionAction> DoneAction, bool bIsCountable, int32 Count);
 
     UWorld* GetWorld() const;
 
@@ -346,6 +352,54 @@ public:
 
     float totalRemaining;// moved the decleration here so the call for the function wont reset the value to zero so we can use this value later in the blueprint to check for score or what so ever
 
+    float TimeCounter;//for the new timer logics now we are not using the timer handle to get the time remaining but we are calculating it manually so we can make it possible for the user to add time as a bounce
+
+    /*Adds More Seconds to the current mission time*/
+    UFUNCTION(BlueprintCallable, Category = "Mission Core")
+    FORCEINLINE float AddToMissionTime(float AddedAmount)
+    {
+        if (!CountDown)
+        {
+            MissionTime += AddedAmount;
+        }
+        else
+        {
+            TimeCounter += AddedAmount;
+        }
+        return 0.0f; //we dont need this value but forced inline funtions dont take void functions 
+    };
+
+    /*change the mission type during gameplay so you can activate timed actions when done you can stop counting, this is not like the pause time function, that one is made for menus 
+    * if you want to open the menu so you pause the mission timer, but this function is made for making it dynamic to maybe make some tasks with time and others without it !
+    */
+    UFUNCTION(BlueprintCallable, Category = "Mission Core")
+    FORCEINLINE bool SetMissionType(EMissionType NewType, float InitalTime, bool IsCountDown)
+    {
+
+        if (MissionType == EMissionType::Regulared && NewType == EMissionType::Timed)//to make sure the previous type was not timed so we dont rest the handle by mistake
+        {
+            MissionType = NewType;
+
+            MissionTime = InitalTime;
+            TimeCounter = IsCountDown ? MissionTime : 0.0f;
+            GetWorld()->GetTimerManager().SetTimer(MissionTimer, this, &UArrowsMissionObject::MissionTimeOver, 1.0f, true);
+
+            return true;
+        }
+
+        else if (MissionType == EMissionType::Timed && NewType == EMissionType::Regulared)
+        {
+            MissionType = NewType;
+            GetWorld()->GetTimerManager().ClearTimer(MissionTimer);
+            MissionTimer.Invalidate();
+            
+            return true;
+        }
+
+        return false;
+    };
+    
+
     UFUNCTION()
     void MissionTimeOver();
 
@@ -371,6 +425,13 @@ public:
     UPROPERTY(EditAnywhere, Category = "Mission Settings")
     TArray<TSubclassOf<UMissionAction>> MissionBlackListedActions;
 
+    /*these are optional actions if happened then more socre or more time is given to the player or even any logics you want to have , [On Task Done] to implement your logics
+    * it is called when ever a mission required action is preformed or optional one , you just need to check the action if it was specific one then do your logics
+    */
+    UPROPERTY(EditAnywhere, Category = "Mission Settings")
+    TArray<TSubclassOf<UMissionAction>> MissionBounce;
+
+    /*used when the mission status type is one by one so we dont update the statues too since we are not showcasing it on screen*/
     UPROPERTY()
     TArray<TSubclassOf<UMissionAction>> ActivatedActions;
 
@@ -379,12 +440,15 @@ public:
     TSubclassOf<UMissionAction> FailureCauseAction;
 
     /*Use For UI Only , To Showcase The Status Of Each Mission Task, Use [GetActionInfo()] To Get The Information For Certain Action*/
-    UPROPERTY(BlueprintReadOnly, Category = "Mission Settings")
+    UPROPERTY()
     TArray<FMissionActionStates> MissionActionsState;
 
-    UPROPERTY(BlueprintReadOnly)
+    UPROPERTY()
     TArray<FMissionActionStates> BlackListedActionsStates;
  
+    UPROPERTY()
+    TArray<FMissionActionStates> BounceActionsStates;
+
     /*Reference to the mission component*/
     UPROPERTY(BlueprintReadOnly, Category = "Mission Settings")
     UArrowsMissionComponent* MissionComponent;
@@ -395,4 +459,21 @@ public:
     UFUNCTION(BlueprintPure, BlueprintCallable, Category = "Mission Core")
     TArray<FMissionActionStates>GetMissionStatues();
 
+
+    FORCEINLINE int32 GetActionIndex(TArray<FMissionActionStates> States, TSubclassOf<UMissionAction> MissionAction)
+    {
+        int32 _Index = 0;
+        for (int i = 0; i <= States.Num() - 1; i++)
+        {
+            FMissionActionStates Itirator = States[i];
+
+            if (Itirator.MissionAction == MissionAction)
+            {
+                _Index = i;
+                return _Index;
+            }
+        }
+
+        return INDEX_NONE;
+    }
 };
