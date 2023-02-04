@@ -6,6 +6,7 @@
 #include "UObject/NoExportTypes.h"
 #include "MissionAction.h"
 #include "MissionFadeWidget.h"
+#include "TimerManager.h"
 #include "ArrowsMissionObject.generated.h"
 
 /**
@@ -219,6 +220,10 @@ public:
     UPROPERTY(EditAnywhere, Category = "Mission Settings")
     EMissionType MissionType;
 
+    /*Get Mission Type [Timed or regular]*/
+    UFUNCTION(BlueprintPure, BlueprintCallable, Category = "Mission Core")
+    FORCEINLINE EMissionType GetMissionType() { return MissionType; };
+
     /*Defines the behaviour of showcasing the tasks results on screen if one by one or all shown , the effect of this variable occurs on the "Get Mission Status" Function
     the results will be either one of those*/
     UPROPERTY(EditAnywhere, Category = "Mission Settings")
@@ -262,10 +267,15 @@ public:
     bool AutoGoNextMission;
 
 
-    /* the delay for the restart or for going to next mission auto calls, this is the time the mission will take before fading in after the fade out */
+    /* the delay for the restart or for going to next mission auto calls, this is the time the mission will take before fading in after the fade out , in other words the time the screen stays black */
     UPROPERTY(EditAnywhere, Category = "Mission Settings")
     float AutoCallsDelay;
 
+    /*when next mission is a mission that sets the player's location, this mission will fade out after it finishes and after the fade out it waits some time in the dark before starting next
+    mission , the dark time it stays in in the [Auto Calls Delay ] , since the start new mission is a delayed call , and this time here is used to do the oppiste , is the time before even the fade out 
+    start's so you can show some ui when the mission is finished in this time and also dont forget to remove all ui before the next mission start's */
+    UPROPERTY(EditAnywhere, Category = "Mission Settings")
+    float FadeOutDelay;
 
     bool DisableMissionFade;
     /*should the screen fade when restart or start the mission , this is must use if [mission in place ] boolean was false, meaning the mission will set a new 
@@ -327,12 +337,15 @@ public:
     {
         TArray<TSubclassOf<UMissionAction>> TempArray;
 
-        for (auto& RequiredAction : MissionRequiredActions)
+        if (MissionRequiredActions.Num() > 0)
         {
-            UMissionAction* BaseClass = RequiredAction.GetDefaultObject();
-            if (BaseClass->Countable)
+            for (auto& RequiredAction : MissionRequiredActions)
             {
-                TempArray.Add(RequiredAction);
+                UMissionAction* BaseClass = RequiredAction.GetDefaultObject();
+                if (BaseClass->Countable)
+                {
+                    TempArray.Add(RequiredAction);
+                }
             }
         }
 
@@ -373,32 +386,8 @@ public:
     * if you want to open the menu so you pause the mission timer, but this function is made for making it dynamic to maybe make some tasks with time and others without it !
     */
     UFUNCTION(BlueprintCallable, Category = "Mission Core")
-    FORCEINLINE bool SetMissionType(EMissionType NewType, float InitalTime, bool IsCountDown)
-    {
-
-        if (MissionType == EMissionType::Regulared && NewType == EMissionType::Timed)//to make sure the previous type was not timed so we dont rest the handle by mistake
-        {
-            MissionType = NewType;
-
-            MissionTime = InitalTime;
-            TimeCounter = IsCountDown ? MissionTime : 0.0f;
-            GetWorld()->GetTimerManager().SetTimer(MissionTimer, this, &UArrowsMissionObject::MissionTimeOver, 1.0f, true);
-
-            return true;
-        }
-
-        else if (MissionType == EMissionType::Timed && NewType == EMissionType::Regulared)
-        {
-            MissionType = NewType;
-            GetWorld()->GetTimerManager().ClearTimer(MissionTimer);
-            MissionTimer.Invalidate();
-            
-            return true;
-        }
-
-        return false;
-    };
-    
+    bool SetMissionType(EMissionType NewType, float InitalTime, bool IsCountDown);
+   
 
     UFUNCTION()
     void MissionTimeOver();

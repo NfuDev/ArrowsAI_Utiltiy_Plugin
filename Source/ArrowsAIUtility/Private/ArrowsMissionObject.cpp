@@ -4,7 +4,6 @@
 #include "ArrowsMissionObject.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "ArrowsMissionComponent.h"
-#include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 
 UArrowsMissionObject::UArrowsMissionObject()
@@ -22,6 +21,7 @@ UArrowsMissionObject::UArrowsMissionObject()
 	AutoGoNextMission = true;
 	AutoCallsDelay = 3.0f;
 	DisableMissionFade = false;
+	FadeOutDelay = 2.0f;
 }
 
 void UArrowsMissionObject::MissionBegin_Implementation(bool WasRestarted)
@@ -97,7 +97,7 @@ void  UArrowsMissionObject::MissionEnd_Implementation(bool Success)
 		}
     }
 
-	else if (AutoGoNextMission)
+	else if (AutoGoNextMission && NextMission != NULL)
 	{
 		UArrowsMissionObject* NextMissionClassDefaults = NextMission.GetDefaultObject();
 
@@ -109,7 +109,7 @@ void  UArrowsMissionObject::MissionEnd_Implementation(bool Success)
 		else
 		{
 			FTimerHandle FadeTimerHandle;
-			GetWorld()->GetTimerManager().SetTimer(FadeTimerHandle, this, &UArrowsMissionObject::DelayedMissionFade, 2.0f, false);
+			GetWorld()->GetTimerManager().SetTimer(FadeTimerHandle, this, &UArrowsMissionObject::DelayedMissionFade, FadeOutDelay, false);
 		}
 
 	}
@@ -622,3 +622,30 @@ void UArrowsMissionObject::OnTaskDone_Implementation(TSubclassOf<UMissionAction>
 {
 	//..
 }
+
+bool UArrowsMissionObject::SetMissionType(EMissionType NewType, float InitalTime, bool IsCountDown)
+{
+
+	if (MissionType == EMissionType::Regulared && NewType == EMissionType::Timed)//to make sure the previous type was not timed so we dont rest the handle by mistake
+	{
+		MissionType = NewType;
+
+		MissionTime = InitalTime;
+		CountDown = IsCountDown;
+		TimeCounter = IsCountDown ? MissionTime : 0.0f;
+		GetWorld()->GetTimerManager().SetTimer(MissionTimer, this, &UArrowsMissionObject::MissionTimeOver, 1.0f, true);
+
+		return true;
+	}
+
+	else if (MissionType == EMissionType::Timed && NewType == EMissionType::Regulared)
+	{
+		MissionType = NewType;
+		GetWorld()->GetTimerManager().ClearTimer(MissionTimer);
+		MissionTimer.Invalidate();
+
+		return true;
+	}
+
+	return false;
+};
