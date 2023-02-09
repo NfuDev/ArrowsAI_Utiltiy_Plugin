@@ -40,30 +40,39 @@ void UArrowsMissionComponent::TickComponent(float DeltaTime, ELevelTick TickType
 
 void UArrowsMissionComponent::StartNewMission(TSubclassOf<UArrowsMissionObject> NewMission)
 {
-
-	CurrentMission =  NewObject<UArrowsMissionObject>(this, NewMission);
-
-	CurrentMission->MissionComponent = this;
-	CurrentMission->MissionBegin_Implementation(false);
-	CurrentMission->MissionBegin(false);
-	if (CurrentMission)
+	if (IsValid(NewMission))
 	{
-	/*	if (GEngine)
-		{
-			FString mes = "Start New Mission Is Called, new mission successfully started";
-			GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Green, mes);
-		}*/
-	}
+		CurrentMission = NewObject<UArrowsMissionObject>(this, NewMission);
 
+		CurrentMission->MissionComponent = this;
+		CurrentMission->MissionBegin_Implementation(false);
+		CurrentMission->MissionBegin(false);
+	}
 }
 
 void UArrowsMissionComponent::RestartMission()
 {
-	CurrentMission = NewObject<UArrowsMissionObject>(this, CurrentMission->GetClass());
+	if (CurrentMission)
+	{
+		if (CurrentMission->CurrentMissionState == EMissionState::InProgress)
+		{
+			/*forcing the mission to end and fail*/
+			CurrentMission->CurrentMissionState = EMissionState::Failed;
+			CurrentMission->MissionFaluireType = EMissionFaluireType::ForcedFail;
+			CurrentMission->MissionEnd(false);
+			
 
-	CurrentMission->MissionComponent = this;
-	CurrentMission->MissionBegin_Implementation(true);
-	CurrentMission->MissionBegin(true);
+			FTimerHandle RestartHandle;
+			GetWorld()->GetTimerManager().SetTimer(RestartHandle, CurrentMission, &UArrowsMissionObject::DelayedRestartFade, CurrentMission->AutoCallsDelay, false);
+			return;
+		}
+
+		CurrentMission = NewObject<UArrowsMissionObject>(this, CurrentMission->GetClass());
+
+		CurrentMission->MissionComponent = this;
+		CurrentMission->MissionBegin_Implementation(true);
+		CurrentMission->MissionBegin(true);
+	}
 }
 
 void UArrowsMissionComponent::ForceMissionFade()
@@ -72,4 +81,14 @@ void UArrowsMissionComponent::ForceMissionFade()
 	{
 		CurrentMission->ForceFadeAnimation();
 	}
+}
+
+void UArrowsMissionComponent::GoToNextMission()
+{
+	if (CurrentMission)
+	{
+		if (CurrentMission->CurrentMissionState == EMissionState::InProgress)
+		StartNewMission(CurrentMission->NextMission);
+	}
+	
 }

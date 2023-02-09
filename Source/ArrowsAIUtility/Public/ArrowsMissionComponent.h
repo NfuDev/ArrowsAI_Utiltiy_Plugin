@@ -41,6 +41,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Component Core")
 	void ForceMissionFade();
 		
+	/*Called To Restart Any Currently Running Mission*/
 	UFUNCTION(BlueprintCallable, Category = "Component Core")
     void RestartMission();
+
+	/*Called To Manually Go To Next Mission if The [Go To Next Mission] boolean in the mission object is false, wont work if mission is in progress , this 
+	function is meant to be used when you do not want to use [Auto Go To Next Mission]*/
+	UFUNCTION(BlueprintCallable, Category = "Component Core")
+	void GoToNextMission();
 };

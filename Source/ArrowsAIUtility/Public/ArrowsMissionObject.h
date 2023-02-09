@@ -98,7 +98,8 @@ UENUM(BlueprintType)
 enum class EMissionFaluireType : uint8
 {
     Timer UMETA(DisplayName = "Time Out"),
-    DoneAction UMETA(DisplayName = "black listed action")
+    DoneAction UMETA(DisplayName = "black listed action"),
+    ForcedFail UMETA(DisplayName = "Developer Choice")
 };
 
 UENUM(BlueprintType)
@@ -305,7 +306,7 @@ public:
 
     /*Fades Out The Screen with the rate givin, best use when you want to start new mission that is not set to [start in place]*/
     UFUNCTION(BlueprintCallable, Category = "Mission Core")
-    void MissionScreenFade(float Rate);
+    void MissionScreenFade(float Rate, bool FadeOut = true);
 
     /*To auto start new mission after a delay since this logic i found my self forced to implement in my blueprint logics for all missions so i decided to make it part of the mission core logics*/
     UFUNCTION()
@@ -465,4 +466,12 @@ public:
 
         return INDEX_NONE;
     }
+
+    /*used to create an instance of specific action so we can call the activation on it so the user can implement and isolated logics there*/
+    UFUNCTION()
+    void ActivateAction(TSubclassOf<UMissionAction> ActivatedAction, int32 Count);
+
+    UFUNCTION()
+    void FinsihAction(TSubclassOf<UMissionAction> ActivatedAction, int32 Count);
+
 };

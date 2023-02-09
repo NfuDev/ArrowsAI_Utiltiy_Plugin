@@ -156,9 +156,10 @@ void  UArrowsMissionObject::ForceFadeAnimation()
 
 }
 
-void  UArrowsMissionObject::MissionScreenFade(float Rate)
+void  UArrowsMissionObject::MissionScreenFade(float Rate, bool FadeOut)
 {
-	FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Reverse, Rate);
+	TEnumAsByte<EUMGSequencePlayMode::Type> Mode = FadeOut ? EUMGSequencePlayMode::Reverse : EUMGSequencePlayMode::Forward;
+	FadeWidget->PlayFadeAnimatoin(Mode, Rate);
 }
 
 //Delay The restart
@@ -383,6 +384,7 @@ void UArrowsMissionObject::InitActionStates()
 			for (FMissionActionStates State : MissionActionsState)
 			{
 				OnTaskActivated(State.MissionAction, State.GetMissionDefaults()->Countable, State.TotalCount);//activate all actions if the getter type was set to (show all) so the activation will work for all of them
+				ActivateAction(State.MissionAction, State.TotalCount);
 			}
 		}
 
@@ -390,6 +392,7 @@ void UArrowsMissionObject::InitActionStates()
 		{
 			OnTaskActivated(MissionActionsState[0].MissionAction, MissionActionsState[0].GetMissionDefaults()->Countable, MissionActionsState[0].TotalCount);
 			ActivatedActions.Add(MissionActionsState[0].MissionAction);
+			ActivateAction(MissionActionsState[0].MissionAction, MissionActionsState[0].TotalCount);
 		}
 
 	}
@@ -600,15 +603,18 @@ void UArrowsMissionObject::OnActionDone(TSubclassOf<UMissionAction> DoneAction, 
 
 				OnTaskActivated(State.MissionAction, ActionClassDefaults->Countable, State.TotalCount);
 				ActivatedActions.Add(State.MissionAction);
+				ActivateAction(State.MissionAction, State.TotalCount);
 			}
 		}
 
 		OnTaskDone(DoneAction, DoneAction.GetDefaultObject()->Countable, MissionActionsState[Index].TotalCount);
+		FinsihAction(DoneAction, MissionActionsState[Index].TotalCount);
 	}
 
 	else
 	{
 		OnTaskDone(DoneAction, DoneAction.GetDefaultObject()->Countable, BounceActionsStates[Index].TotalCount);
+		FinsihAction(DoneAction, BounceActionsStates[Index].TotalCount);
 	}
 	
 }
@@ -648,4 +654,18 @@ bool UArrowsMissionObject::SetMissionType(EMissionType NewType, float InitalTime
 	}
 
 	return false;
-};
+}
+
+void UArrowsMissionObject::ActivateAction(TSubclassOf<UMissionAction> ActivatedAction, int32 Count)
+{
+	UMissionAction* ActionRefernce = NewObject<UMissionAction>(this, ActivatedAction);
+
+	ActionRefernce->OnReciveActivation(this, Count);
+}
+
+void UArrowsMissionObject::FinsihAction(TSubclassOf<UMissionAction> ActivatedAction, int32 Count)
+{
+	UMissionAction* ActionRefernce = NewObject<UMissionAction>(this, ActivatedAction);
+
+	ActionRefernce->OnReciveFinish(this, Count);
+}
