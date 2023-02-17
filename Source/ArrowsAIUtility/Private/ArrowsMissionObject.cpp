@@ -3,6 +3,7 @@
 
 #include "ArrowsMissionObject.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Kismet/GameplayStatics.h"
 #include "ArrowsMissionComponent.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -57,6 +58,9 @@ void UArrowsMissionObject::MissionBegin_Implementation(bool WasRestarted)
 			{
 				//set the player to start transform here, and use maybe a timer for when the set is done call the fade below there, 
 				MissionComponent->GetOwner()->SetActorTransform(StartLocation);
+				APlayerController* controller = UGameplayStatics::GetPlayerController(this->GetWorld(), 0);
+				controller->SetControlRotation(StartLocation.GetRotation().Rotator());
+
 				FadeWidget->PlayFadeAnimatoin(EUMGSequencePlayMode::Forward);
 			}
 
@@ -165,9 +169,10 @@ void  UArrowsMissionObject::MissionScreenFade(float Rate, bool FadeOut)
 //Delay The restart
 void  UArrowsMissionObject::TriggerRestartCounter()//this is happening after the screen goes dark after fade animation
 {
-	UArrowsMissionObject* ClassDefaultObject = Cast<UArrowsMissionObject>(this->GetClass()->GetDefaultObject());
-	
 	MissionComponent->GetOwner()->SetActorTransform(StartLocation);
+	APlayerController* controller = UGameplayStatics::GetPlayerController(this->GetWorld(), 0);
+	controller->SetControlRotation(StartLocation.GetRotation().Rotator());
+
 	MissionComponent->RestartMission();
 }
 
