@@ -86,6 +86,7 @@ void  UArrowsMissionObject::MissionEnd_Implementation(bool Success)
 	//..
 	if (!Success)
 	{
+		MissionComponent->OnMissionFailed.Broadcast();
 		if (AutoRestart)
 		{
 			FTimerHandle RestartHandle;
@@ -103,6 +104,7 @@ void  UArrowsMissionObject::MissionEnd_Implementation(bool Success)
 
 	else if (AutoGoNextMission && NextMission != NULL)
 	{
+		MissionComponent->OnMissionPassed.Broadcast();
 		UArrowsMissionObject* NextMissionClassDefaults = NextMission.GetDefaultObject();
 
 		if (NextMissionClassDefaults->MissionInPlace)
@@ -116,8 +118,13 @@ void  UArrowsMissionObject::MissionEnd_Implementation(bool Success)
 			GetWorld()->GetTimerManager().SetTimer(FadeTimerHandle, this, &UArrowsMissionObject::DelayedMissionFade, FadeOutDelay, false);
 		}
 
+		return;
 	}
 
+	else
+	{
+		MissionComponent->OnMissionPassed.Broadcast();
+	}
 }
 
 void  UArrowsMissionObject::DelayedStartNewMission()

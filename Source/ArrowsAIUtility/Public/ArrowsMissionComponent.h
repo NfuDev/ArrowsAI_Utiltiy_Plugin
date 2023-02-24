@@ -5,8 +5,12 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "ArrowsMissionObject.h"
+#include "Delegates/Delegate.h"
 #include "ArrowsMissionComponent.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FUpdateAssociation);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMissionPassed);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMissionFailed);
 
 UCLASS(Blueprintable, BlueprintType, ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class ARROWSAIUTILITY_API UArrowsMissionComponent : public UActorComponent
@@ -31,6 +35,18 @@ public:
 	UPROPERTY(BlueprintReadWrite, Category = "Mission Settings")
 	UArrowsMissionObject* CurrentMission;
 
+	/*called when a certain mission is restarted, so you can have a global logic when mission restarts, implemented in any other class by binding events to this delegate*/
+	UPROPERTY(BlueprintAssignable, Category = "Component Core")
+	FUpdateAssociation MissionRestarted;
+
+	/*called when mission is passed , used to have global logics for mission pass , like showing general "You Win" if the mission has it own ui to show when winning and all mission have 
+	some in common ui they show when win , then use this delegate to call the in common ui creation logics , or any other logics needed when mission passed*/
+	UPROPERTY(BlueprintAssignable, Category = "Component Core")
+	FOnMissionPassed OnMissionPassed;
+
+	/*same as for mission passed but for mission failed*/
+	UPROPERTY(BlueprintAssignable, Category = "Component Core")
+	FOnMissionFailed OnMissionFailed;
 
 	/*Start New Mission*/
 	UFUNCTION(BlueprintCallable, Category = "Component Core")

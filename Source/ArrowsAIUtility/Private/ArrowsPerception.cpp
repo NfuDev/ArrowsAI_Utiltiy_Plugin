@@ -414,49 +414,54 @@ void UArrowsPerception::ResetRecentlyRegained()
 
 void UArrowsPerception::NewPerceptionUpdate()
 {
-	//update awareness value for UI Only
-	if (GetWorld()->GetTimerManager().IsTimerActive(AwarenessTimeHandler))
+	if (DivinePlayerRef)
 	{
-		AgentAwareness = GetWorld()->GetTimerManager().GetTimerElapsed(AwarenessTimeHandler);
 
-	}
-
-	float DistanceToPlayer = (GetOwner()->GetActorLocation() - DivinePlayerRef->GetActorLocation()).Size();
-
-	// for debug only
-	if (bNearAgentDetects)
-	{
-		PrintDebugs("Am Checking Cuz i got report", 0.0f);
-	}
-	
-	if (DistanceToPlayer <= SensingRadius || !bPlayerWasSpotted)
-	{
-		PrintDebugs("Am Thinking", 0.0f);
-
-		if (TargetInVision())
+		//update awareness value for UI Only
+		if (GetWorld()->GetTimerManager().IsTimerActive(AwarenessTimeHandler))
 		{
-			if (HasLineOfSight() && !bHasLineOfSight)
-			{
-				bHasLineOfSight = true;//the variable is to prevent the spam of this part of code
-				OnAgentPerceptionUpdate();
-			}
-			else if (!HasLineOfSight() && bHasLineOfSight)
-			{
-				bHasLineOfSight = false;
-				OnAgentPerceptionUpdate();
-			}
+			AgentAwareness = GetWorld()->GetTimerManager().GetTimerElapsed(AwarenessTimeHandler);
 
-			if(HasLineOfSight())
-				EscapeTransform = DivinePlayerRef->GetActorTransform();
 		}
 
+		float DistanceToPlayer = (GetOwner()->GetActorLocation() - DivinePlayerRef->GetActorLocation()).Size();
+
+		// for debug only
+		if (bNearAgentDetects)
+		{
+			PrintDebugs("Am Checking Cuz i got report", 0.0f);
+		}
+
+		if (DistanceToPlayer <= SensingRadius || !bPlayerWasSpotted)
+		{
+			PrintDebugs("Am Thinking", 0.0f);
+
+			if (TargetInVision())
+			{
+				if (HasLineOfSight() && !bHasLineOfSight)
+				{
+					bHasLineOfSight = true;//the variable is to prevent the spam of this part of code
+					OnAgentPerceptionUpdate();
+				}
+				else if (!HasLineOfSight() && bHasLineOfSight)
+				{
+					bHasLineOfSight = false;
+					OnAgentPerceptionUpdate();
+				}
+
+				if (HasLineOfSight())
+					EscapeTransform = DivinePlayerRef->GetActorTransform();
+			}
+
+		}
+
+		else if (bPlayerWasSpotted)
+		{
+			bHasLineOfSight = HasLineOfSight();
+			OnAgentPerceptionUpdate();
+		}
 	}
 
-	else if (bPlayerWasSpotted)
-	{
-		bHasLineOfSight = HasLineOfSight();
-		OnAgentPerceptionUpdate();
-	}
 }
 
 bool UArrowsPerception::TargetInVision()

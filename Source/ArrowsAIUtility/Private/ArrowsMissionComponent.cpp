@@ -66,12 +66,15 @@ void UArrowsMissionComponent::RestartMission()
 			GetWorld()->GetTimerManager().SetTimer(RestartHandle, CurrentMission, &UArrowsMissionObject::DelayedRestartFade, CurrentMission->AutoCallsDelay, false);
 			return;
 		}
+		UArrowsMissionObject* PreviousMesssion = CurrentMission;
 
 		CurrentMission = NewObject<UArrowsMissionObject>(this, CurrentMission->GetClass());
 
 		CurrentMission->MissionComponent = this;
+		CurrentMission->AssossiatedActors = PreviousMesssion->AssossiatedActors;
 		CurrentMission->MissionBegin_Implementation(true);
 		CurrentMission->MissionBegin(true);
+		MissionRestarted.Broadcast();
 	}
 }
 
@@ -87,8 +90,10 @@ void UArrowsMissionComponent::GoToNextMission()
 {
 	if (CurrentMission)
 	{
-		if (CurrentMission->CurrentMissionState == EMissionState::InProgress)
-		StartNewMission(CurrentMission->NextMission);
+		if (CurrentMission->CurrentMissionState != EMissionState::InProgress)
+		{
+			StartNewMission(CurrentMission->NextMission);
+		}
 	}
 	
 }
